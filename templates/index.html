@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Yuanne</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    height: 100vh;
+    background: #f5f5f5;
+    color: #333;
+}
+
+/* ===== 聊天页 ===== */
+#tab-chat {
+    display: none;
+    height: calc(100vh - 56px);
+}
+#tab-chat.active { display: flex; }
+#chat-sidebar {
+    width: 270px;
+    background: #e6e6e6;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #d9d9d9;
+    flex-shrink: 0;
+}
+#chat-sidebar-header {
+    padding: 20px 18px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+#chat-sidebar-header h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a1a1a;
+}
+#new-btn {
+    width: 30px; height: 30px;
+    border: none; border-radius: 6px;
+    background: #d4d4d4; color: #555;
+    font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+}
+#new-btn:hover { background: #c5c5c5; }
+#conv-list { flex: 1; overflow-y: auto; }
+.conv-item {
+    padding: 15px 20px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.1s;
+    border-bottom: 0.5px solid rgba(0,0,0,0.04);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.conv-item:hover { background: #dbdbdb; }
+.conv-item.active { background: #d2d2d2; font-weight: 500; }
+.conv-item .conv-name { flex: 1; min-width: 0; }
+.conv-item .delete-conv {
+    visibility: hidden;
+    border: none; background: none;
+    color: #bbb; cursor: pointer;
+    font-size: 16px; padding: 4px; flex-shrink: 0;
+}
+.conv-item:hover .delete-conv { visibility: visible; }
+.conv-item .delete-conv:hover { color: #d44; }
+#chat-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #f5f5f5;
+}
+#chat-header {
+    padding: 16px 24px;
+    background: #f5f5f5;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+#chat-header h3 { font-size: 15px; font-weight: 600; color: #1a1a1a; }
+#chat-header button {
+    border: none; background: none;
+    font-size: 17px; cursor: pointer;
+    padding: 4px 8px; border-radius: 6px;
+    color: #999; transition: background 0.12s;
+}
+#chat-header button:hover { background: #e5e5e5; }
+#chat-box { flex: 1; overflow-y: auto; padding: 20px 24px; }
+.msg-row { display: flex; margin-bottom: 20px; align-items: flex-start; }
+.msg-row.user { flex-direction: row-reverse; }
+.msg-avatar {
+    width: 36px; height: 36px; border-radius: 4px;
+    flex-shrink: 0; background: #ddd; overflow: hidden;
+}
+.msg-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.msg-bubble {
+    max-width: 70%; padding: 10px 14px;
+    line-height: 1.55; font-size: 14px;
+    word-break: break-word; white-space: pre-wrap;
+    position: relative; margin: 0 10px;
+}
+.msg-row.user .msg-bubble { background: #d8d8d8; border-radius: 4px; color: #1a1a1a; }
+.msg-row.ai .msg-bubble { background: #fff; border-radius: 4px; color: #333; }
+.msg-bubble::before {
+    content: ""; position: absolute; top: 10px;
+    width: 0; height: 0; border: 5px solid transparent;
+}
+.msg-row.user .msg-bubble::before { right: -8px; border-left-color: #d8d8d8; border-right: 0; }
+.msg-row.ai .msg-bubble::before { left: -8px; border-right-color: #fff; border-left: 0; }
+#chat-title.typing { color: #999; }
+#input-area {
+    display: flex; padding: 14px 20px;
+    background: #f5f5f5; gap: 10px;
+    border-top: 1px solid #e0e0e0; flex-shrink: 0;
+}
+#user-input {
+    flex: 1; padding: 10px 16px;
+    border: 1px solid #e0e0e0; border-radius: 6px;
+    background: #fff; font-size: 14px; outline: none;
+}
+#user-input:focus { border-color: #bbb; }
+#user-input::placeholder { color: #b0b0b0; }
+#send-btn {
+    padding: 10px 20px; border: none; border-radius: 6px;
+    background: #e0e0e0; color: #aaa;
+    font-size: 13px; cursor: pointer; font-weight: 500;
+    transition: all 0.12s;
+}
+#send-btn:not(:disabled) { background: #555; color: #fff; cursor: pointer; }
+#send-btn:not(:disabled):hover { background: #444; }
+#welcome { text-align: center; color: #bbb; margin-top: 140px; font-size: 13px; }
+
+/* ===== 通讯录 ===== */
+#tab-contacts {
+    display: none;
+    height: calc(100vh - 56px);
+    overflow-y: auto;
+    background: #f5f5f5;
+}
+#tab-contacts.active { display: block; }
+#contacts-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px;
+    background: #f5f5f5;
+    color: #999;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+    position: sticky; top: 0; z-index: 5;
+    border-bottom: 1px solid #eee;
+    max-width: 480px;
+}
+#contacts-header:hover { background: #eee; }
+#contacts-arrow { display: inline-block; width: 16px; text-align: center; transition: transform 0.2s; }
+#contacts-list.collapsed { display: none; }
+#contacts-list-inner {
+    max-width: 480px;
+}
+.contact-item {
+    display: flex; align-items: center;
+    padding: 14px 20px;
+    background: #fff;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+.contact-item:hover { background: #f8f8f8; }
+.contact-item.active { background: #eef; }
+.contact-avatar {
+    width: 44px; height: 44px; border-radius: 6px;
+    background: #ddd; flex-shrink: 0;
+    overflow: hidden; margin-right: 14px;
+}
+.contact-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.contact-info { flex: 1; min-width: 0; }
+.contact-name { font-size: 15px; font-weight: 500; color: #1a1a1a; }
+.contact-bio {
+    font-size: 12px; color: #999; margin-top: 3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.contact-item .delete-conv {
+    visibility: hidden; border: none; background: none;
+    color: #bbb; cursor: pointer;
+    font-size: 16px; padding: 4px; flex-shrink: 0;
+}
+.contact-item:hover .delete-conv { visibility: visible; }
+.contact-item .delete-conv:hover { color: #d44; }
+
+/* ===== 发现页（朋友圈） ===== */
+#tab-discover {
+    display: none;
+    height: calc(100vh - 56px);
+    overflow-y: auto;
+    background: #fff;
+}
+#tab-discover.active { display: block; }
+#moments-header {
+    padding: 16px 20px;
+    font-size: 16px; font-weight: 600;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    position: sticky; top: 0; z-index: 5;
+}
+.moment-card {
+    background: #fff;
+    margin: 8px 0;
+    padding: 18px 20px;
+    border-bottom: 1px solid #f0f0f0;
+}
+.moment-top { display: flex; align-items: flex-start; margin-bottom: 12px; }
+.moment-avatar {
+    width: 40px; height: 40px; border-radius: 4px;
+    background: #ddd; flex-shrink: 0;
+    overflow: hidden; margin-right: 12px;
+}
+.moment-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.moment-author { font-size: 14px; font-weight: 600; color: #1a1a1a; }
+.moment-time { font-size: 11px; color: #bbb; margin-top: 2px; }
+.moment-content {
+    font-size: 14px; line-height: 1.6;
+    color: #333; margin-bottom: 14px; word-break: break-word;
+}
+.moment-actions {
+    display: flex; gap: 24px;
+    font-size: 13px; color: #999;
+    padding-top: 10px; border-top: 1px solid #f8f8f8;
+}
+.moment-actions span { cursor: pointer; }
+.moment-actions span:hover { color: #555; }
+.moment-actions .liked { color: #e44; }
+.moment-comments {
+    margin-top: 10px; background: #f8f8f8;
+    border-radius: 4px; padding: 10px 12px;
+}
+.moment-comment { font-size: 13px; margin-bottom: 6px; line-height: 1.5; }
+.moment-comment:last-child { margin-bottom: 0; }
+.moment-comment .cmt-author { font-weight: 500; color: #555; margin-right: 6px; }
+.comment-input-row { display: flex; margin-top: 8px; gap: 8px; }
+.comment-input-row input {
+    flex: 1; padding: 6px 10px;
+    border: 1px solid #e0e0e0; border-radius: 4px;
+    font-size: 13px; outline: none;
+}
+.comment-input-row button {
+    padding: 6px 14px; border: none; border-radius: 4px;
+    background: #555; color: #fff;
+    font-size: 12px; cursor: pointer; white-space: nowrap;
+}
+#moments-empty { text-align: center; color: #bbb; padding: 60px 20px; font-size: 13px; }
+#auto-post-status { text-align: center; color: #ccc; font-size: 11px; padding: 8px; }
+
+/* ===== 弹窗 ===== */
+.modal-overlay {
+    display: none;
+    position: fixed; top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.2);
+    justify-content: center; align-items: center;
+    z-index: 100;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+    background: #fff; border-radius: 8px;
+    padding: 28px 26px 20px; width: 400px;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.08);
+}
+.modal h3 { margin-bottom: 20px; font-size: 15px; font-weight: 600; color: #1a1a1a; }
+.modal label { font-size: 12px; color: #999; display: block; margin: 12px 0 4px; }
+.modal input, .modal textarea {
+    width: 100%; padding: 10px 12px;
+    border: 1px solid #e0e0e0; border-radius: 6px;
+    font-size: 14px; outline: none; font-family: inherit;
+    transition: border-color 0.15s;
+}
+.modal textarea { height: 80px; resize: vertical; }
+.modal input:focus, .modal textarea:focus { border-color: #999; }
+.modal-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+.modal-btns button {
+    padding: 8px 22px; border: none; border-radius: 6px;
+    font-size: 13px; cursor: pointer; font-weight: 500;
+}
+.modal-btns .btn-cancel { background: #e8e8e8; color: #333; }
+.modal-btns .btn-cancel:hover { background: #ddd; }
+.modal-btns .btn-save { background: #555; color: #fff; }
+.modal-btns .btn-save:hover { background: #444; }
+
+/* ===== 底部 Tab 栏 ===== */
+#tab-bar {
+    display: flex;
+    background: #f0f0f0;
+    border-top: 1px solid #ddd;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 56px; z-index: 50;
+}
+.tab-item {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    cursor: pointer; color: #999;
+    font-size: 11px; transition: color 0.15s;
+    user-select: none;
+}
+.tab-item .tab-icon { margin-bottom: 2px; line-height: 0; pointer-events: none; }
+.tab-item.active { color: #333; }
+</style>
+</head>
+<body>
+
+<!-- 聊天页 -->
+<div id="tab-chat" class="tab-panel active">
+    <div id="chat-sidebar">
+        <div id="chat-sidebar-header">
+            <h2>Yuanne</h2>
+            <button id="new-btn" title="新建">+</button>
+        </div>
+        <div id="conv-list"></div>
+    </div>
+    <div id="chat-main">
+        <div id="chat-header">
+            <h3 id="chat-title">选择一个对话</h3>
+            <button id="settings-btn" title="编辑人设" style="display:none">⚙</button>
+        </div>
+        <div id="chat-box">
+            <div id="welcome">选择或新建一个对话开始聊天</div>
+        </div>
+        <div id="input-area">
+            <input type="text" id="user-input" placeholder="输入消息..." disabled>
+            <button id="send-btn" disabled>发送</button>
+        </div>
+    </div>
+</div>
+
+<!-- 通讯录页 -->
+<div id="tab-contacts" class="tab-panel">
+    <div id="contacts-header" onclick="toggleContacts()">
+        <span>联系人</span>
+        <span id="contacts-arrow" style="font-size:12px;">▼</span>
+    </div>
+    <div id="contacts-list">
+        <div id="contacts-list-inner"></div>
+    </div>
+</div>
+
+<!-- 发现页（朋友圈） -->
+<div id="tab-discover" class="tab-panel">
+    <div id="moments-header">朋友圈</div>
+    <div id="moments-feed"></div>
+    <div id="auto-post-status"></div>
+</div>
+
+<!-- 底部 Tab 栏 -->
+<div id="tab-bar">
+    <div class="tab-item active" data-tab="chat">
+        <span class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>聊天
+    </div>
+    <div class="tab-item" data-tab="contacts">
+        <span class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></span>通讯录
+    </div>
+    <div class="tab-item" data-tab="discover">
+        <span class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/></svg></span>发现
+    </div>
+</div>
+
+<div id="modal" class="modal-overlay">
+    <div class="modal">
+        <h3 id="modal-title">新建对话</h3>
+        <label>对话名称</label>
+        <input type="text" id="modal-name" placeholder="如：段瑾">
+        <label>AI 人设（选填）</label>
+        <textarea id="modal-persona" placeholder="描述 AI 的性格、语气、角色……"></textarea>
+        <div class="modal-btns">
+            <button class="btn-cancel" onclick="closeModal()">取消</button>
+            <button class="btn-save" id="modal-save">保存</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let conversations = [];
+let currentConvId = null;
+let modalMode = "new";
+let staggerTimer = null;
+
+const AVATAR_URL = "/static/avatar.jpg";
+
+const Api = {
+    async get(url) { return (await fetch(url)).json(); },
+    async post(url, body) { return (await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) })).json(); },
+    async put(url, body) { return (await fetch(url, { method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) })).json(); },
+    async del(url) { await fetch(url, { method:"DELETE" }); }
+};
+
+async function loadConversations() {
+    conversations = await Api.get("/api/conversations");
+    renderConvList();
+}
+
+function renderConvList() {
+    const list = document.getElementById("conv-list");
+    if (!list) return;
+    list.innerHTML = conversations.map(c => `
+        <div class="conv-item${c.id === currentConvId ? ' active' : ''}" data-id="${c.id}">
+            <span class="conv-name">${escapeHtml(c.name)}</span>
+            <button class="delete-conv" data-id="${c.id}">×</button>
+        </div>
+    `).join("");
+    list.querySelectorAll(".conv-item").forEach(el => {
+        el.addEventListener("click", e => {
+            if (e.target.classList.contains("delete-conv")) return;
+            switchConversation(el.dataset.id);
+        });
+    });
+    list.querySelectorAll(".delete-conv").forEach(btn => {
+        btn.addEventListener("click", async e => {
+            e.stopPropagation();
+            await Api.del(`/api/conversations/${btn.dataset.id}`);
+            if (currentConvId === btn.dataset.id) { currentConvId = null; renderChatArea(); }
+            await loadConversations();
+        });
+    });
+}
+
+function renderContacts() {
+    const list = document.getElementById("contacts-list-inner");
+    if (!list) return;
+    list.innerHTML = conversations.map(c => {
+        const bio = (c.persona || "").replace(/[\n\r]/g, " ").substring(0, 30) + "...";
+        return '<div class="contact-item' + (c.id === currentConvId ? ' active' : '') + '" data-id="' + c.id + '">'
+            + '<div class="contact-avatar"><img src="/static/ima.jpg" alt=""></div>'
+            + '<div class="contact-info"><div class="contact-name">' + escapeHtml(c.name) + '</div>'
+            + '<div class="contact-bio">' + escapeHtml(bio) + '</div></div>'
+            + '<button class="delete-conv" data-id="' + c.id + '">×</button>'
+            + '</div>';
+    }).join("");
+    list.querySelectorAll(".contact-item").forEach(el => {
+        el.addEventListener("click", e => {
+            if (e.target.classList.contains("delete-conv")) return;
+            switchConversation(el.dataset.id);
+        });
+    });
+    list.querySelectorAll(".delete-conv").forEach(btn => {
+        btn.addEventListener("click", async e => {
+            e.stopPropagation();
+            await Api.del(`/api/conversations/${btn.dataset.id}`);
+            if (currentConvId === btn.dataset.id) { currentConvId = null; renderChatArea(); }
+            await loadConversations();
+        });
+    });
+}
+
+async function switchConversation(id) {
+    clearAutoTimer();
+    if (staggerTimer) { clearInterval(staggerTimer); staggerTimer = null; }
+    await loadConversations();
+    currentConvId = id;
+    const conv = conversations.find(c => c.id === id);
+    document.getElementById("chat-title").textContent = conv ? conv.name : "";
+    document.getElementById("settings-btn").style.display = "inline-block";
+    document.getElementById("user-input").disabled = false;
+    renderConvList();
+    renderChatArea();
+    if (conv && (!conv.messages || conv.messages.length === 0)) {
+        sendMessage();
+    }
+}
+
+function renderChatArea() {
+    const conv = conversations.find(c => c.id === currentConvId);
+    const box = document.getElementById("chat-box");
+    if (!box) return;
+    if (!conv || !conv.messages || conv.messages.length === 0) {
+        box.innerHTML = '<div id="welcome">开始聊天吧 ✨</div>';
+        return;
+    }
+    box.innerHTML = conv.messages.map(m => {
+        const isUser = m.role === "user";
+        if (isUser) {
+            return `<div class="msg-row user">
+                <div class="msg-avatar"><img src="${AVATAR_URL}" alt=""></div>
+                <div class="msg-bubble">${escapeHtml(m.content)}</div>
+            </div>`;
+        }
+        const lines = m.content.split(/\n/).filter(l => l.trim());
+        return lines.map(line =>
+            `<div class="msg-row ai">
+                <div class="msg-avatar"><img src="/static/ima.jpg" alt=""></div>
+                <div class="msg-bubble">${escapeHtml(line)}</div>
+            </div>`
+        ).join("");
+    }).join("");
+    box.scrollTop = box.scrollHeight;
+}
+
+function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+async function sendMessage() {
+    if (!currentConvId) return;
+    const input = document.getElementById("user-input");
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    input.disabled = true;
+    document.getElementById("send-btn").disabled = true;
+    clearAutoTimer();
+    showTyping(true);
+    const box = document.getElementById("chat-box");
+    const welcome = document.getElementById("welcome");
+    if (welcome) welcome.remove();
+    const conv = conversations.find(c => c.id === currentConvId);
+    box.insertAdjacentHTML("beforeend",
+        '<div class="msg-row user">'
+        + '<div class="msg-avatar"><img src="' + AVATAR_URL + '" alt=""></div>'
+        + '<div class="msg-bubble">' + escapeHtml(text) + '</div>'
+        + '</div>');
+    box.scrollTop = box.scrollHeight;
+    let aiText = "";
+    try {
+        const res = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ conv_id: currentConvId, message: text })
+        });
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value);
+            const sseLines = chunk.split("\n");
+            for (const sseLine of sseLines) {
+                if (!sseLine.startsWith("data: ")) continue;
+                const dataStr = sseLine.slice(6);
+                if (dataStr === "[DONE]") continue;
+                try {
+                    const data = JSON.parse(dataStr);
+                    if (data.done) {
+                        if (conv) {
+                            conv.messages = conv.messages || [];
+                            conv.messages.push({ role: "user", content: text });
+                            conv.messages.push({ role: "assistant", content: data.full });
+                        }
+                        const lines = data.full.split(/\n/).filter(l => l.trim());
+                        if (lines.length === 0) { showTyping(false); enableInput(); }
+                        else { showLines(lines, 0); }
+                        resetAutoTimer();
+                    } else if (data.content) { aiText += data.content; }
+                } catch (e) {}
+            }
+        }
+    } catch (err) { showTyping(false); enableInput(); }
+    function showLines(lines, idx) {
+        if (idx >= lines.length) { showTyping(false); enableInput(); return; }
+        const row = document.createElement("div");
+        row.className = "msg-row ai";
+        row.innerHTML = '<div class="msg-avatar"><img src="/static/ima.jpg" alt=""></div><div class="msg-bubble">' + escapeHtml(lines[idx]) + '</div>';
+        box.appendChild(row); box.scrollTop = box.scrollHeight;
+        setTimeout(function() { showLines(lines, idx + 1); }, 2000);
+    }
+    function enableInput() { input.disabled = false; updateSendBtn(); input.focus(); }
+}
+
+function updateSendBtn() {
+    const btn = document.getElementById("send-btn");
+    if (!btn) return;
+    const hasText = document.getElementById("user-input").value.trim();
+    btn.disabled = !hasText;
+}
+
+function showTyping(show) {
+    const title = document.getElementById("chat-title");
+    if (!title) return;
+    if (show) {
+        if (!title.classList.contains("typing")) title._original = title.textContent;
+        title.textContent = "正在输入中...";
+        title.classList.add("typing");
+    } else {
+        if (title._original) title.textContent = title._original;
+        title.classList.remove("typing");
+    }
+}
+
+let autoTimer = null, autoCount = 0;
+const AUTO_DELAY = 60, AUTO_MAX = 3;
+function clearAutoTimer() { clearTimeout(autoTimer); autoTimer = null; }
+function resetAutoTimer() {
+    clearAutoTimer(); autoCount = 0;
+    if (!currentConvId) return;
+    autoTimer = setTimeout(sendAutoMessage, AUTO_DELAY * 1000);
+}
+async function sendAutoMessage() {
+    if (!currentConvId || autoCount >= AUTO_MAX) return;
+    showTyping(true);
+    try {
+        const res = await fetch("/api/auto-message", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ conv_id: currentConvId })
+        });
+        const data = await res.json();
+        if (data.content) {
+            const conv = conversations.find(c => c.id === currentConvId);
+            if (conv) {
+                conv.messages = conv.messages || [];
+                conv.messages.push({ role: "assistant", content: data.content });
+            }
+            const box = document.getElementById("chat-box");
+            const lines = data.content.split(/\n/).filter(l => l.trim());
+            for (const line of lines) {
+                box.insertAdjacentHTML("beforeend",
+                    '<div class="msg-row ai"><div class="msg-avatar"><img src="/static/ima.jpg" alt=""></div><div class="msg-bubble">' + escapeHtml(line) + '</div></div>');
+            }
+            box.scrollTop = box.scrollHeight; autoCount++; showTyping(false);
+            if (autoCount < AUTO_MAX) autoTimer = setTimeout(sendAutoMessage, AUTO_DELAY * 1000);
+        }
+    } catch (e) { showTyping(false); }
+}
+
+function openModal(mode) {
+    modalMode = mode;
+    const conv = mode === "edit" ? conversations.find(c => c.id === currentConvId) : null;
+    document.getElementById("modal-title").textContent = mode === "new" ? "新建对话" : "编辑人设";
+    document.getElementById("modal-name").value = conv ? conv.name : "";
+    document.getElementById("modal-persona").value = conv ? (conv.persona || "") : "";
+    document.getElementById("modal").classList.add("show");
+}
+function closeModal() { document.getElementById("modal").classList.remove("show"); }
+
+document.getElementById("modal-save").addEventListener("click", async () => {
+    const name = document.getElementById("modal-name").value.trim() || "未命名";
+    const persona = document.getElementById("modal-persona").value.trim();
+    if (modalMode === "new") {
+        const conv = await Api.post("/api/conversations", { name, persona });
+        await loadConversations();
+        switchConversation(conv.id);
+    } else if (modalMode === "edit" && currentConvId) {
+        await Api.put(`/api/conversations/${currentConvId}`, { name, persona });
+        await loadConversations();
+        renderChatArea(); renderConvList();
+    }
+    closeModal();
+});
+
+document.getElementById("new-btn").addEventListener("click", () => openModal("new"));
+document.getElementById("settings-btn").addEventListener("click", () => openModal("edit"));
+document.getElementById("send-btn").addEventListener("click", sendMessage);
+document.getElementById("user-input").addEventListener("keydown", e => { if (e.key === "Enter") sendMessage(); });
+document.getElementById("user-input").addEventListener("input", function(e) { updateSendBtn(); resetAutoTimer(); });
+
+loadConversations();
+
+// ========== Tab 切换 ==========
+let currentTab = "chat";
+document.querySelectorAll("#tab-bar .tab-item").forEach(item => {
+    item.addEventListener("click", function() { switchTab(this.dataset.tab); });
+});
+
+function switchTab(tab) {
+    try {
+        currentTab = tab;
+        document.querySelectorAll("#tab-bar .tab-item").forEach(t => t.classList.remove("active"));
+        var tabBtn = document.querySelector("#tab-bar .tab-item[data-tab='" + tab + "']");
+        if (tabBtn) tabBtn.classList.add("active");
+
+        document.getElementById("tab-chat").classList.remove("active");
+        document.getElementById("tab-contacts").classList.remove("active");
+        document.getElementById("tab-discover").classList.remove("active");
+
+        if (tab === "chat") {
+            document.getElementById("tab-chat").classList.add("active");
+            stopAutoPostTimer();
+        } else if (tab === "contacts") {
+            document.getElementById("tab-contacts").classList.add("active");
+            renderContacts();
+            stopAutoPostTimer();
+        } else if (tab === "discover") {
+            document.getElementById("tab-discover").classList.add("active");
+            loadPosts();
+            startAutoPostTimer();
+        }
+    } catch(e) { console.error("switchTab error:", e); }
+}
+
+function toggleContacts() {
+    const list = document.getElementById("contacts-list");
+    const arrow = document.getElementById("contacts-arrow");
+    list.classList.toggle("collapsed");
+    arrow.style.transform = list.classList.contains("collapsed") ? "rotate(180deg)" : "";
+}
+
+// ========== 朋友圈 ==========
+let posts = [], autoPostTimer = null;
+const AUTO_POST_MIN = 3 * 60 * 1000, AUTO_POST_MAX = 8 * 60 * 1000;
+
+async function loadPosts() {
+    try { const res = await fetch("/api/posts"); posts = await res.json(); renderFeed(); } catch(e) {}
+}
+
+function renderFeed() {
+    const feed = document.getElementById("moments-feed");
+    if (!feed) return;
+    if (posts.length === 0) {
+        feed.innerHTML = '<div id="moments-empty">还没有动态<br><small>AI 角色会不定时自动发朋友圈哦</small></div>';
+        return;
+    }
+    feed.innerHTML = posts.map(p => {
+        const timeStr = new Date(p.timestamp * 1000).toLocaleString("zh-CN", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" });
+        const isLiked = p.likes.indexOf(currentConvId) >= 0;
+        const commentsHTML = p.comments.map(cmt =>
+            '<div class="moment-comment"><span class="cmt-author">' + escapeHtml(cmt.author_name) + '</span>' + escapeHtml(cmt.content) + '</div>'
+        ).join("");
+        const showComments = p._showComments ? ' style="display:block"' : ' style="display:none"';
+        return '<div class="moment-card" data-post-id="' + p.id + '">'
+            + '<div class="moment-top">'
+            + '<div class="moment-avatar"><img src="/static/ima.jpg" alt=""></div>'
+            + '<div><div class="moment-author">' + escapeHtml(p.author_name) + '</div>'
+            + '<div class="moment-time">' + timeStr + '</div></div></div>'
+            + '<div class="moment-content">' + escapeHtml(p.content) + '</div>'
+            + '<div class="moment-actions">'
+            + '<span class="' + (isLiked ? 'liked' : '') + '" data-action="like">❤️ ' + p.likes.length + '</span>'
+            + '<span data-action="comment">💬 ' + p.comments.length + '</span></div>'
+            + '<div class="moment-comments"' + showComments + '>'
+            + commentsHTML
+            + '<div class="comment-input-row">'
+            + '<input type="text" placeholder="评论..." data-post-id="' + p.id + '">'
+            + '<button data-post-id="' + p.id + '">发送</button></div></div></div>';
+    }).join("");
+
+    feed.querySelectorAll('[data-action="like"]').forEach(el => {
+        el.addEventListener("click", async function() {
+            const card = this.closest(".moment-card"); const postId = card.dataset.postId;
+            if (!currentConvId) { switchTab("chat"); return; }
+            const res = await fetch("/api/posts/" + postId + "/like", {
+                method: "POST", headers: {"Content-Type":"application/json"},
+                body: JSON.stringify({ conv_id: currentConvId })
+            });
+            const data = await res.json();
+            this.classList.toggle("liked", data.likes.indexOf(currentConvId) >= 0);
+            this.textContent = "❤️ " + data.count;
+        });
+    });
+    feed.querySelectorAll('[data-action="comment"]').forEach(el => {
+        el.addEventListener("click", function() {
+            const card = this.closest(".moment-card"); const postId = card.dataset.postId;
+            const post = posts.find(p => p.id === postId);
+            if (post) { post._showComments = !post._showComments; renderFeed(); }
+        });
+    });
+    feed.querySelectorAll(".comment-input-row button").forEach(btn => {
+        btn.addEventListener("click", async function() {
+            const postId = this.dataset.postId;
+            const input = this.parentElement.querySelector("input");
+            const content = input.value.trim();
+            if (!content || !currentConvId) return;
+            const res = await fetch("/api/posts/" + postId + "/comment", {
+                method: "POST", headers: {"Content-Type":"application/json"},
+                body: JSON.stringify({ conv_id: currentConvId, content: content })
+            });
+            if (res.ok) { input.value = ""; await loadPosts();
+                const post = posts.find(p => p.id === postId);
+                if (post) post._showComments = true; renderFeed(); }
+        });
+    });
+}
+
+function startAutoPostTimer() { if (autoPostTimer) return; scheduleAutoPost(); }
+function scheduleAutoPost() {
+    const delay = AUTO_POST_MIN + Math.random() * (AUTO_POST_MAX - AUTO_POST_MIN);
+    autoPostTimer = setTimeout(async () => {
+        try {
+            document.getElementById("auto-post-status").textContent = "AI 正在发动态...";
+            const res = await fetch("/api/auto-post", { method: "POST" });
+            if (res.ok) { await loadPosts(); document.getElementById("auto-post-status").textContent = ""; }
+        } catch(e) {}
+        if (currentTab === "discover") scheduleAutoPost();
+    }, delay);
+}
+function stopAutoPostTimer() { clearTimeout(autoPostTimer); autoPostTimer = null; }
+
+loadPosts();
+</script>
+</body>
+</html>
