@@ -19,6 +19,13 @@ body {
     height: calc(100vh - 56px);
 }
 #tab-chat.active { display: flex; }
+.tab-panel.active {
+    animation: tab-fade-in 0.25s ease;
+}
+@keyframes tab-fade-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 #chat-sidebar {
     width: 270px;
     background: #e6e6e6;
@@ -711,7 +718,7 @@ function renderFeed() {
     const feed = document.getElementById("moments-feed");
     if (!feed) return;
     if (posts.length === 0) {
-        feed.innerHTML = '<div id="moments-empty">还没有动态<br><small>AI 角色会不定时自动发朋友圈哦</small></div>';
+        feed.innerHTML = '<div id="moments-empty">还没有动态<br><small>TA会不定时更新动态</small></div>';
         return;
     }
     feed.innerHTML = posts.map(p => {
