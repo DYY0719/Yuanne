@@ -278,6 +278,14 @@ body {
     box-shadow: 0 2px 12px rgba(0,0,0,0.3);
 }
 #notify-banner.show { transform: translateY(0); }
+/* 通知横幅呼吸灯 - 吸引注意 */
+#notify-banner.show .notify-avatar {
+    animation: notify-pulse 1.2s ease-in-out infinite;
+}
+@keyframes notify-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.25); }
+    50% { box-shadow: 0 0 0 6px rgba(255,255,255,0.08); }
+}
 #notify-banner .notify-avatar {
     width: 40px; height: 40px; border-radius: 6px;
     background: #444; flex-shrink: 0; overflow: hidden;
@@ -657,8 +665,10 @@ function showTyping(show) {
         title.textContent = "正在输入中...";
         title.classList.add("typing");
     } else {
-        if (title._original) title.textContent = title._original;
+        // 【修复】仅当 _original 看起来是正常名字时才还原，防止"加载中..."被覆盖
+        if (title._original && title._original !== "加载中...") title.textContent = title._original;
         title.classList.remove("typing");
+        title._original = null;
     }
 }
 
@@ -708,24 +718,25 @@ async function sendAutoMessage() {
 let notifyTargetId = null;
 let notifyTimer = null;
 let notifyDismissTimer = null;
-let notifyFirstRun = true;  // 首次触发用较短延迟
-const NOTIFY_INTERVAL_MIN = 75 * 1000;   // 常规最小间隔
-const NOTIFY_INTERVAL_MAX = 150 * 1000;  // 常规最大间隔
-const NOTIFY_FIRST_DELAY = 20 * 1000;    // 首次触发延迟（让用户快速看到效果）
+let notifyFirstRun = true;
+const NOTIFY_INTERVAL_MIN = 60 * 1000;   // 常规最小间隔
+const NOTIFY_INTERVAL_MAX = 120 * 1000;  // 常规最大间隔
+const NOTIFY_FIRST_DELAY = 6 * 1000;     // 首次触发延迟（快速验证）
 
 function showNotification(conv, preview) {
-    // 防重复：banner 已显示则跳过
     const banner = document.getElementById("notify-banner");
     if (banner.classList.contains("show")) return;
+    console.log("[通知弹窗] 显示:", conv.name, "| 预览:", preview);
     notifyTargetId = conv.id;
     document.getElementById("notify-name").textContent = conv.name;
     document.getElementById("notify-preview").textContent = preview;
     banner.classList.add("show");
     if (notifyDismissTimer) clearTimeout(notifyDismissTimer);
-    notifyDismissTimer = setTimeout(hideNotification, 5000);
+    notifyDismissTimer = setTimeout(hideNotification, 8000);
 }
 
 function hideNotification() {
+    console.log("[通知弹窗] 隐藏");
     document.getElementById("notify-banner").classList.remove("show");
     notifyTargetId = null;
     if (notifyDismissTimer) clearTimeout(notifyDismissTimer);
@@ -733,6 +744,7 @@ function hideNotification() {
 
 function onNotifyClick() {
     const id = notifyTargetId;
+    console.log("[通知弹窗] 点击跳转, targetId:", id);
     hideNotification();
     if (id) {
         switchTab("chat");
@@ -741,14 +753,16 @@ function onNotifyClick() {
 }
 
 async function checkCrossNotification() {
-    if (!currentConvId) { scheduleNotify(); return; }
-    // 【修复】捕获世代，异步返回后校验
-    const myGen = activeGen;
-    const myCurrentId = currentConvId;
-    const candidates = conversations.filter(c => c.id !== myCurrentId && c.messages && c.messages.length > 0);
+    console.log("[通知] checkCrossNotification 触发, currentConvId:", currentConvId, "conversations.length:", conversations.length);
+    if (!currentConvId) { console.log("[通知] 未选择对话，跳过"); scheduleNotify(); return; }
+    const candidates = conversations.filter(c => c.id !== currentConvId && c.messages && c.messages.length > 0);
+    console.log("[通知] 候选对话数:", candidates.length);
     if (candidates.length === 0) { scheduleNotify(); return; }
     const conv = candidates[Math.floor(Math.random() * candidates.length)];
+    const myGen = activeGen;
+    const myCurrentId = currentConvId;
     const targetId = conv.id;
+    console.log("[通知] 选中:", conv.name, "targetId:", targetId);
     try {
         const res = await fetch("/api/notify", {
             method: "POST",
@@ -756,12 +770,12 @@ async function checkCrossNotification() {
             body: JSON.stringify({ conv_id: targetId })
         });
         const data = await res.json();
-        // 世代校验 + 未切换到目标对话 + banner未显示
+        console.log("[通知] API返回:", data.content ? "有内容" : data.error || "空");
         if (data.content && activeGen === myGen && currentConvId !== targetId) {
             const preview = data.content.replace(/[\n\r]/g, " ").substring(0, 50);
             showNotification(conv, preview);
         }
-    } catch (e) {}
+    } catch (e) { console.error("[通知] API失败:", e); }
     scheduleNotify();
 }
 
@@ -769,17 +783,18 @@ function scheduleNotify() {
     if (notifyTimer) clearTimeout(notifyTimer);
     let delay;
     if (notifyFirstRun) {
-        // 首次快速触发，让用户感知通知功能
-        delay = NOTIFY_FIRST_DELAY + Math.random() * 15 * 1000;
+        delay = NOTIFY_FIRST_DELAY + Math.random() * 6 * 1000;
         notifyFirstRun = false;
+        console.log("[通知] 首次调度, delay:", Math.round(delay/1000), "s");
     } else {
         delay = NOTIFY_INTERVAL_MIN + Math.random() * (NOTIFY_INTERVAL_MAX - NOTIFY_INTERVAL_MIN);
+        console.log("[通知] 常规调度, delay:", Math.round(delay/1000), "s");
     }
     notifyTimer = setTimeout(checkCrossNotification, delay);
 }
 
 function startNotifyTimer() {
-    notifyFirstRun = true;  // 每次页面加载重置为首发延迟
+    notifyFirstRun = true;
     scheduleNotify();
 }
 
@@ -816,7 +831,19 @@ document.getElementById("send-btn").addEventListener("click", sendMessage);
 document.getElementById("user-input").addEventListener("keydown", e => { if (e.key === "Enter") sendMessage(); });
 document.getElementById("user-input").addEventListener("input", function(e) { updateSendBtn(); resetAutoTimer(); });
 
-loadConversations();
+// 初始化：加载对话 → 自检通知
+loadConversations().then(() => {
+    console.log("[初始化] 对话已加载, 共", conversations.length, "个");
+    // 自检：3秒后弹一次通知验证功能可用
+    setTimeout(() => {
+        const candidates = conversations.filter(c => c.messages && c.messages.length > 0);
+        if (candidates.length > 0 && !currentConvId) {
+            const conv = candidates[Math.floor(Math.random() * candidates.length)];
+            showNotification(conv, "💬 你有新消息（通知功能自检）");
+            console.log("[自检] 已触发测试通知, 目标:", conv.name);
+        }
+    }, 3000);
+});
 
 // ========== Tab 切换 ==========
 let currentTab = "chat";
