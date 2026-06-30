@@ -433,6 +433,7 @@ let conversations = [];
 let currentConvId = null;
 let modalMode = "new";
 let staggerTimer = null;
+let activeGen = 0;  // 【修复】世代计数器：切对话时+1，异步操作校验用，解决 await 窗口期 currentConvId 未更新问题
 
 const AVATAR_URL = "/static/avatar.jpg";
 
@@ -502,14 +503,30 @@ function renderContacts() {
 }
 
 async function switchConversation(id) {
+    // 【修复】先递增世代，让所有进行中的异步操作（SSE/autoMessage/showLines）立即失效
+    activeGen++;
+    // 【修复】currentConvId 提前到 await 之前更新，旧锁立即生效
+    currentConvId = id;
     clearAutoTimer();
     if (staggerTimer) { clearInterval(staggerTimer); staggerTimer = null; }
-    await loadConversations();
-    currentConvId = id;
+    // 立刻清空聊天区，避免旧内容残留
+    const box = document.getElementById("chat-box");
+    if (box) { box.innerHTML = '<div id="welcome">加载中...</div>'; }
+    document.getElementById("chat-title").textContent = "加载中...";
+    document.getElementById("settings-btn").style.display = "none";
+    document.getElementById("user-input").disabled = true;
+    try {
+        await loadConversations();
+    } catch(e) {
+        // 加载失败也继续渲染（用内存中的数据）
+    }
+    // 加载期间可能又切走了，再次校验
+    if (currentConvId !== id) return;
     const conv = conversations.find(c => c.id === id);
     document.getElementById("chat-title").textContent = conv ? conv.name : "";
     document.getElementById("settings-btn").style.display = "inline-block";
     document.getElementById("user-input").disabled = false;
+    document.getElementById("send-btn").disabled = true;
     renderConvList();
     renderChatArea();
     if (conv && (!conv.messages || conv.messages.length === 0)) {
@@ -552,8 +569,9 @@ function escapeHtml(str) {
 
 async function sendMessage() {
     if (!currentConvId) return;
-    // 【修复】保存当前对话ID，异步SSE流返回后校验，防止切对话时消息串位
+    // 【修复】捕获当前世代，异步SSE流返回后校验世代未变，防止切对话时消息串位
     const originConvId = currentConvId;
+    const myGen = activeGen;
     const input = document.getElementById("user-input");
     const text = input.value.trim();
     if (!text) return;
@@ -579,13 +597,15 @@ async function sendMessage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ conv_id: originConvId, message: text })
         });
+        // 【修复】世代校验：切过对话则中止
+        if (activeGen !== myGen) { showTyping(false); return; }
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            // 对话已切换则中止流读取
-            if (currentConvId !== originConvId) { showTyping(false); return; }
+            // 每次读取后校验世代
+            if (activeGen !== myGen) { showTyping(false); return; }
             const chunk = decoder.decode(value);
             const sseLines = chunk.split("\n");
             for (const sseLine of sseLines) {
@@ -610,8 +630,8 @@ async function sendMessage() {
         }
     } catch (err) { showTyping(false); enableInput(); }
     function showLines(lines, idx) {
-        // 对话已切换则停止逐行渲染
-        if (currentConvId !== originConvId) { return; }
+        // 【修复】世代校验：切过对话则停止逐行渲染
+        if (activeGen !== myGen) { return; }
         if (idx >= lines.length) { showTyping(false); enableInput(); return; }
         const row = document.createElement("div");
         row.className = "msg-row ai";
@@ -652,16 +672,17 @@ function resetAutoTimer() {
 }
 async function sendAutoMessage() {
     if (!currentConvId || autoCount >= AUTO_MAX) return;
-    // 【修复】保存当前对话ID，异步返回后校验，防止切对话时消息插入错误的聊天框
+    // 【修复】捕获当前世代，异步返回后校验世代未变，防止切对话时消息串位
     const originConvId = currentConvId;
+    const myGen = activeGen;
     showTyping(true);
     try {
         const res = await fetch("/api/auto-message", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ conv_id: originConvId })
         });
-        // 异步返回后校验：对话未切换才继续渲染
-        if (currentConvId !== originConvId) { showTyping(false); return; }
+        // 【修复】世代校验：切过对话则放弃渲染
+        if (activeGen !== myGen) { showTyping(false); return; }
         const data = await res.json();
         if (data.content) {
             const conv = conversations.find(c => c.id === originConvId);
@@ -669,8 +690,8 @@ async function sendAutoMessage() {
                 conv.messages = conv.messages || [];
                 conv.messages.push({ role: "assistant", content: data.content });
             }
-            // 再次校验，防止渲染时对话已切换
-            if (currentConvId !== originConvId) { showTyping(false); return; }
+            // 再次校验世代
+            if (activeGen !== myGen) { showTyping(false); return; }
             const box = document.getElementById("chat-box");
             const lines = data.content.split(/\n/).filter(l => l.trim());
             for (const line of lines) {
@@ -720,12 +741,13 @@ function onNotifyClick() {
 }
 
 async function checkCrossNotification() {
-    // 无当前对话或只有一个对话时跳过
     if (!currentConvId) { scheduleNotify(); return; }
-    const candidates = conversations.filter(c => c.id !== currentConvId && c.messages && c.messages.length > 0);
+    // 【修复】捕获世代，异步返回后校验
+    const myGen = activeGen;
+    const myCurrentId = currentConvId;
+    const candidates = conversations.filter(c => c.id !== myCurrentId && c.messages && c.messages.length > 0);
     if (candidates.length === 0) { scheduleNotify(); return; }
     const conv = candidates[Math.floor(Math.random() * candidates.length)];
-    // 【修复】保存目标ID，异步返回后校验对话未切换
     const targetId = conv.id;
     try {
         const res = await fetch("/api/notify", {
@@ -734,8 +756,8 @@ async function checkCrossNotification() {
             body: JSON.stringify({ conv_id: targetId })
         });
         const data = await res.json();
-        // 校验：对话未切换、且当前不在目标对话中、且banner未在显示
-        if (data.content && currentConvId !== targetId) {
+        // 世代校验 + 未切换到目标对话 + banner未显示
+        if (data.content && activeGen === myGen && currentConvId !== targetId) {
             const preview = data.content.replace(/[\n\r]/g, " ").substring(0, 50);
             showNotification(conv, preview);
         }
