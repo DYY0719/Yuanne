@@ -453,21 +453,24 @@ const Api = {
 };
 
 // 【修复】通知生成的临时消息（key: conv_id, value: content）
+// 永不主动清空，每次 loadConversations 后根据末条消息判断是否需要注入
 let pendingNotifyMessages = {};
 
 async function loadConversations() {
     conversations = await Api.get("/api/conversations");
-    // 【修复】将通知生成的待入库消息注入对应对话
+    // 【修复】每次加载后注入所有待入库的通知消息（末条去重）
     for (const c of conversations) {
-        if (pendingNotifyMessages[c.id]) {
-            c.messages = c.messages || [];
-            c.messages.push({ role: "assistant", content: pendingNotifyMessages[c.id] });
-            console.log("[通知入库] 已将通知消息注入对话:", c.name);
+        const content = pendingNotifyMessages[c.id];
+        if (!content) continue;
+        c.messages = c.messages || [];
+        const lastMsg = c.messages[c.messages.length - 1];
+        if (!lastMsg || lastMsg.content !== content) {
+            c.messages.push({ role: "assistant", content: content });
+            console.log("[通知入库] 注入对话:", c.name, "|", content.substring(0, 30));
+        } else {
+            console.log("[通知入库] 跳过(末条已存在):", c.name);
         }
     }
-    // 注入后清空（下次 loadConversations 不会再重复注入，因为服务器已有一份）
-    // 注意：由于无法写服务端，消息仅存活于当前会话，刷新页面后丢失
-    pendingNotifyMessages = {};
     renderConvList();
 }
 
@@ -862,7 +865,10 @@ loadConversations().then(() => {
         const candidates = conversations.filter(c => c.messages && c.messages.length > 0);
         if (candidates.length > 0 && !currentConvId) {
             const conv = candidates[Math.floor(Math.random() * candidates.length)];
-            showNotification(conv, "💬 你有新消息（通知功能自检）");
+            const testContent = "💬 你有新消息（通知功能自检）";
+            // 【修复】自检消息也写入缓存，确保点击后对话中可见
+            pendingNotifyMessages[conv.id] = testContent;
+            showNotification(conv, testContent);
             console.log("[自检] 已触发测试通知, 目标:", conv.name);
         }
     }, 3000);
