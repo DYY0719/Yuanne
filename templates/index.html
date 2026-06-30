@@ -452,8 +452,22 @@ const Api = {
     async del(url) { await fetch(url, { method:"DELETE" }); }
 };
 
+// 【修复】通知生成的临时消息（key: conv_id, value: content）
+let pendingNotifyMessages = {};
+
 async function loadConversations() {
     conversations = await Api.get("/api/conversations");
+    // 【修复】将通知生成的待入库消息注入对应对话
+    for (const c of conversations) {
+        if (pendingNotifyMessages[c.id]) {
+            c.messages = c.messages || [];
+            c.messages.push({ role: "assistant", content: pendingNotifyMessages[c.id] });
+            console.log("[通知入库] 已将通知消息注入对话:", c.name);
+        }
+    }
+    // 注入后清空（下次 loadConversations 不会再重复注入，因为服务器已有一份）
+    // 注意：由于无法写服务端，消息仅存活于当前会话，刷新页面后丢失
+    pendingNotifyMessages = {};
     renderConvList();
 }
 
@@ -774,6 +788,15 @@ async function checkCrossNotification() {
         if (data.content && activeGen === myGen && currentConvId !== targetId) {
             const preview = data.content.replace(/[\n\r]/g, " ").substring(0, 50);
             showNotification(conv, preview);
+            // 【修复】将通知内容缓存，下次 loadConversations 时注入目标对话
+            pendingNotifyMessages[targetId] = data.content;
+            // 同时写入当前内存中的对话对象（如果还在 conversations 里的话）
+            const memConv = conversations.find(c => c.id === targetId);
+            if (memConv) {
+                memConv.messages = memConv.messages || [];
+                memConv.messages.push({ role: "assistant", content: data.content });
+                console.log("[通知入库] 消息已写入内存对话:", memConv.name);
+            }
         }
     } catch (e) { console.error("[通知] API失败:", e); }
     scheduleNotify();
