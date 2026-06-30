@@ -264,6 +264,33 @@ body {
 #moments-empty { text-align: center; color: #bbb; padding: 60px 20px; font-size: 13px; }
 #auto-post-status { text-align: center; color: #ccc; font-size: 11px; padding: 8px; }
 
+/* ===== 消息通知弹窗 ===== */
+#notify-banner {
+    position: fixed; top: 0; left: 0; right: 0;
+    z-index: 200;
+    transform: translateY(-100%);
+    transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    padding: 12px 16px;
+    background: #1a1a1a;
+    color: #fff;
+    display: flex; align-items: center; gap: 12px;
+    cursor: pointer;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+#notify-banner.show { transform: translateY(0); }
+#notify-banner .notify-avatar {
+    width: 40px; height: 40px; border-radius: 6px;
+    background: #444; flex-shrink: 0; overflow: hidden;
+}
+#notify-banner .notify-avatar img { width: 100%; height: 100%; object-fit: cover; }
+#notify-banner .notify-body { flex: 1; min-width: 0; }
+#notify-banner .notify-name { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+#notify-banner .notify-preview {
+    font-size: 12px; color: #bbb;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#notify-banner .notify-hint { font-size: 11px; color: #888; flex-shrink: 0; }
+
 /* ===== 弹窗 ===== */
 .modal-overlay {
     display: none;
@@ -321,6 +348,16 @@ body {
 </style>
 </head>
 <body>
+
+<!-- 消息通知弹窗 -->
+<div id="notify-banner" onclick="onNotifyClick()">
+    <div class="notify-avatar"><img src="/static/ima.jpg" alt=""></div>
+    <div class="notify-body">
+        <div class="notify-name" id="notify-name"></div>
+        <div class="notify-preview" id="notify-preview"></div>
+    </div>
+    <span class="notify-hint">点击查看</span>
+</div>
 
 <!-- 聊天页 -->
 <div id="tab-chat" class="tab-panel active">
@@ -633,6 +670,72 @@ async function sendAutoMessage() {
         }
     } catch (e) { showTyping(false); }
 }
+
+// ========== 跨对话消息通知 ==========
+let notifyTargetId = null;
+let notifyTimer = null;
+let notifyDismissTimer = null;
+const NOTIFY_INTERVAL_MIN = 90 * 1000;
+const NOTIFY_INTERVAL_MAX = 180 * 1000;
+
+function showNotification(conv, preview) {
+    notifyTargetId = conv.id;
+    document.getElementById("notify-name").textContent = conv.name;
+    document.getElementById("notify-preview").textContent = preview;
+    document.getElementById("notify-banner").classList.add("show");
+    if (notifyDismissTimer) clearTimeout(notifyDismissTimer);
+    notifyDismissTimer = setTimeout(hideNotification, 6000);
+}
+
+function hideNotification() {
+    document.getElementById("notify-banner").classList.remove("show");
+    notifyTargetId = null;
+    if (notifyDismissTimer) clearTimeout(notifyDismissTimer);
+}
+
+function onNotifyClick() {
+    const id = notifyTargetId;
+    hideNotification();
+    if (id) {
+        switchTab("chat");
+        switchConversation(id);
+    }
+}
+
+async function checkCrossNotification() {
+    // 只在不活跃或有对话数据时触发
+    const candidates = conversations.filter(c => c.id !== currentConvId && c.messages && c.messages.length > 0);
+    if (candidates.length === 0) { scheduleNotify(); return; }
+    const conv = candidates[Math.floor(Math.random() * candidates.length)];
+    try {
+        const res = await fetch("/api/notify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ conv_id: conv.id })
+        });
+        const data = await res.json();
+        if (data.content && conv.id !== currentConvId) {
+            const preview = data.content.replace(/[\n\r]/g, " ").substring(0, 50);
+            showNotification(conv, preview);
+            // 存储消息
+            conv.messages = conv.messages || [];
+            conv.messages.push({ role: "assistant", content: data.content });
+        }
+    } catch (e) {}
+    scheduleNotify();
+}
+
+function scheduleNotify() {
+    if (notifyTimer) clearTimeout(notifyTimer);
+    const delay = NOTIFY_INTERVAL_MIN + Math.random() * (NOTIFY_INTERVAL_MAX - NOTIFY_INTERVAL_MIN);
+    notifyTimer = setTimeout(checkCrossNotification, delay);
+}
+
+function startNotifyTimer() {
+    scheduleNotify();
+}
+
+startNotifyTimer();
 
 function openModal(mode) {
     modalMode = mode;
