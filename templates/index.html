@@ -552,6 +552,8 @@ function escapeHtml(str) {
 
 async function sendMessage() {
     if (!currentConvId) return;
+    // 【修复】保存当前对话ID，异步SSE流返回后校验，防止切对话时消息串位
+    const originConvId = currentConvId;
     const input = document.getElementById("user-input");
     const text = input.value.trim();
     if (!text) return;
@@ -563,7 +565,7 @@ async function sendMessage() {
     const box = document.getElementById("chat-box");
     const welcome = document.getElementById("welcome");
     if (welcome) welcome.remove();
-    const conv = conversations.find(c => c.id === currentConvId);
+    const conv = conversations.find(c => c.id === originConvId);
     box.insertAdjacentHTML("beforeend",
         '<div class="msg-row user">'
         + '<div class="msg-avatar"><img src="' + AVATAR_URL + '" alt=""></div>'
@@ -575,13 +577,15 @@ async function sendMessage() {
         const res = await fetch("/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ conv_id: currentConvId, message: text })
+            body: JSON.stringify({ conv_id: originConvId, message: text })
         });
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
+            // 对话已切换则中止流读取
+            if (currentConvId !== originConvId) { showTyping(false); return; }
             const chunk = decoder.decode(value);
             const sseLines = chunk.split("\n");
             for (const sseLine of sseLines) {
@@ -606,6 +610,8 @@ async function sendMessage() {
         }
     } catch (err) { showTyping(false); enableInput(); }
     function showLines(lines, idx) {
+        // 对话已切换则停止逐行渲染
+        if (currentConvId !== originConvId) { return; }
         if (idx >= lines.length) { showTyping(false); enableInput(); return; }
         const row = document.createElement("div");
         row.className = "msg-row ai";
@@ -646,19 +652,25 @@ function resetAutoTimer() {
 }
 async function sendAutoMessage() {
     if (!currentConvId || autoCount >= AUTO_MAX) return;
+    // 【修复】保存当前对话ID，异步返回后校验，防止切对话时消息插入错误的聊天框
+    const originConvId = currentConvId;
     showTyping(true);
     try {
         const res = await fetch("/api/auto-message", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ conv_id: currentConvId })
+            body: JSON.stringify({ conv_id: originConvId })
         });
+        // 异步返回后校验：对话未切换才继续渲染
+        if (currentConvId !== originConvId) { showTyping(false); return; }
         const data = await res.json();
         if (data.content) {
-            const conv = conversations.find(c => c.id === currentConvId);
+            const conv = conversations.find(c => c.id === originConvId);
             if (conv) {
                 conv.messages = conv.messages || [];
                 conv.messages.push({ role: "assistant", content: data.content });
             }
+            // 再次校验，防止渲染时对话已切换
+            if (currentConvId !== originConvId) { showTyping(false); return; }
             const box = document.getElementById("chat-box");
             const lines = data.content.split(/\n/).filter(l => l.trim());
             for (const line of lines) {
@@ -671,20 +683,25 @@ async function sendAutoMessage() {
     } catch (e) { showTyping(false); }
 }
 
-// ========== 跨对话消息通知 ==========
+// ========== 跨对话消息通知（微信式顶部弹窗）==========
 let notifyTargetId = null;
 let notifyTimer = null;
 let notifyDismissTimer = null;
-const NOTIFY_INTERVAL_MIN = 90 * 1000;
-const NOTIFY_INTERVAL_MAX = 180 * 1000;
+let notifyFirstRun = true;  // 首次触发用较短延迟
+const NOTIFY_INTERVAL_MIN = 75 * 1000;   // 常规最小间隔
+const NOTIFY_INTERVAL_MAX = 150 * 1000;  // 常规最大间隔
+const NOTIFY_FIRST_DELAY = 20 * 1000;    // 首次触发延迟（让用户快速看到效果）
 
 function showNotification(conv, preview) {
+    // 防重复：banner 已显示则跳过
+    const banner = document.getElementById("notify-banner");
+    if (banner.classList.contains("show")) return;
     notifyTargetId = conv.id;
     document.getElementById("notify-name").textContent = conv.name;
     document.getElementById("notify-preview").textContent = preview;
-    document.getElementById("notify-banner").classList.add("show");
+    banner.classList.add("show");
     if (notifyDismissTimer) clearTimeout(notifyDismissTimer);
-    notifyDismissTimer = setTimeout(hideNotification, 6000);
+    notifyDismissTimer = setTimeout(hideNotification, 5000);
 }
 
 function hideNotification() {
@@ -703,23 +720,24 @@ function onNotifyClick() {
 }
 
 async function checkCrossNotification() {
-    // 只在不活跃或有对话数据时触发
+    // 无当前对话或只有一个对话时跳过
+    if (!currentConvId) { scheduleNotify(); return; }
     const candidates = conversations.filter(c => c.id !== currentConvId && c.messages && c.messages.length > 0);
     if (candidates.length === 0) { scheduleNotify(); return; }
     const conv = candidates[Math.floor(Math.random() * candidates.length)];
+    // 【修复】保存目标ID，异步返回后校验对话未切换
+    const targetId = conv.id;
     try {
         const res = await fetch("/api/notify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ conv_id: conv.id })
+            body: JSON.stringify({ conv_id: targetId })
         });
         const data = await res.json();
-        if (data.content && conv.id !== currentConvId) {
+        // 校验：对话未切换、且当前不在目标对话中、且banner未在显示
+        if (data.content && currentConvId !== targetId) {
             const preview = data.content.replace(/[\n\r]/g, " ").substring(0, 50);
             showNotification(conv, preview);
-            // 存储消息
-            conv.messages = conv.messages || [];
-            conv.messages.push({ role: "assistant", content: data.content });
         }
     } catch (e) {}
     scheduleNotify();
@@ -727,11 +745,19 @@ async function checkCrossNotification() {
 
 function scheduleNotify() {
     if (notifyTimer) clearTimeout(notifyTimer);
-    const delay = NOTIFY_INTERVAL_MIN + Math.random() * (NOTIFY_INTERVAL_MAX - NOTIFY_INTERVAL_MIN);
+    let delay;
+    if (notifyFirstRun) {
+        // 首次快速触发，让用户感知通知功能
+        delay = NOTIFY_FIRST_DELAY + Math.random() * 15 * 1000;
+        notifyFirstRun = false;
+    } else {
+        delay = NOTIFY_INTERVAL_MIN + Math.random() * (NOTIFY_INTERVAL_MAX - NOTIFY_INTERVAL_MIN);
+    }
     notifyTimer = setTimeout(checkCrossNotification, delay);
 }
 
 function startNotifyTimer() {
+    notifyFirstRun = true;  // 每次页面加载重置为首发延迟
     scheduleNotify();
 }
 
