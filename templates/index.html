@@ -264,41 +264,6 @@ body {
 #moments-empty { text-align: center; color: #bbb; padding: 60px 20px; font-size: 13px; }
 #auto-post-status { text-align: center; color: #ccc; font-size: 11px; padding: 8px; }
 
-/* ===== 消息通知弹窗 ===== */
-#notify-banner {
-    position: fixed; top: 0; left: 0; right: 0;
-    z-index: 200;
-    transform: translateY(-100%);
-    transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    padding: 12px 16px;
-    background: #1a1a1a;
-    color: #fff;
-    display: flex; align-items: center; gap: 12px;
-    cursor: pointer;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
-}
-#notify-banner.show { transform: translateY(0); }
-/* 通知横幅呼吸灯 - 吸引注意 */
-#notify-banner.show .notify-avatar {
-    animation: notify-pulse 1.2s ease-in-out infinite;
-}
-@keyframes notify-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.25); }
-    50% { box-shadow: 0 0 0 6px rgba(255,255,255,0.08); }
-}
-#notify-banner .notify-avatar {
-    width: 40px; height: 40px; border-radius: 6px;
-    background: #444; flex-shrink: 0; overflow: hidden;
-}
-#notify-banner .notify-avatar img { width: 100%; height: 100%; object-fit: cover; }
-#notify-banner .notify-body { flex: 1; min-width: 0; }
-#notify-banner .notify-name { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
-#notify-banner .notify-preview {
-    font-size: 12px; color: #bbb;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-#notify-banner .notify-hint { font-size: 11px; color: #888; flex-shrink: 0; }
-
 /* ===== 弹窗 ===== */
 .modal-overlay {
     display: none;
@@ -357,16 +322,6 @@ body {
 </style>
 </head>
 <body>
-
-<!-- 消息通知弹窗 -->
-<div id="notify-banner" onclick="onNotifyClick()">
-    <div class="notify-avatar"><img src="/static/ima.jpg" alt=""></div>
-    <div class="notify-body">
-        <div class="notify-name" id="notify-name"></div>
-        <div class="notify-preview" id="notify-preview"></div>
-    </div>
-    <span class="notify-hint">点击查看</span>
-</div>
 
 <!-- 聊天页 -->
 <div id="tab-chat" class="tab-panel active">
@@ -456,25 +411,8 @@ const Api = {
     async del(url) { await fetch(url, { method:"DELETE" }); }
 };
 
-// 【修复】通知生成的临时消息（key: conv_id, value: content）
-// 永不主动清空，每次 loadConversations 后根据末条消息判断是否需要注入
-let pendingNotifyMessages = {};
-
 async function loadConversations() {
     conversations = await Api.get("/api/conversations");
-    // 【修复】每次加载后注入所有待入库的通知消息（末条去重）
-    for (const c of conversations) {
-        const content = pendingNotifyMessages[c.id];
-        if (!content) continue;
-        c.messages = c.messages || [];
-        const lastMsg = c.messages[c.messages.length - 1];
-        if (!lastMsg || lastMsg.content !== content) {
-            c.messages.push({ role: "assistant", content: content });
-            console.log("[通知入库] 注入对话:", c.name, "|", content.substring(0, 30));
-        } else {
-            console.log("[通知入库] 跳过(末条已存在):", c.name);
-        }
-    }
     renderConvList();
 }
 
@@ -531,7 +469,7 @@ function renderContacts() {
     });
 }
 
-async function switchConversation(id, notifyContent) {
+async function switchConversation(id) {
     // 【修复】先递增世代，让所有进行中的异步操作（SSE/autoMessage/showLines）立即失效
     activeGen++;
     // 【修复】currentConvId 提前到 await 之前更新，旧锁立即生效
@@ -552,22 +490,6 @@ async function switchConversation(id, notifyContent) {
     // 加载期间可能又切走了，再次校验
     if (currentConvId !== id) return;
     const conv = conversations.find(c => c.id === id);
-    // 【修复】双路径注入通知内容，渲染前确保消息到位
-    // 路径1: 从 onNotifyClick 直接传入的 notifyContent
-    // 路径2: 兜底从 pendingNotifyMessages 取（处理侧边栏点击等非通知入口）
-    const injectContent = notifyContent || (id ? pendingNotifyMessages[id] : null);
-    if (injectContent && conv) {
-        conv.messages = conv.messages || [];
-        const lastMsg = conv.messages[conv.messages.length - 1];
-        if (!lastMsg || lastMsg.content !== injectContent) {
-            conv.messages.push({ role: "assistant", content: injectContent });
-            console.log("[通知注入] 直注成功:", conv.name, "| 来源:", notifyContent ? "onNotifyClick" : "pendingNotify", "|", injectContent.substring(0, 30));
-        } else {
-            console.log("[通知注入] 跳过(末条已存在):", conv.name);
-        }
-    } else if (!injectContent) {
-        console.log("[通知注入] 无待注入内容, id:", id, "notifyContent:", !!notifyContent, "pending:", id ? !!pendingNotifyMessages[id] : "N/A");
-    }
     document.getElementById("chat-title").textContent = conv ? conv.name : "";
     document.getElementById("settings-btn").style.display = "inline-block";
     document.getElementById("user-input").disabled = false;
@@ -761,109 +683,6 @@ async function sendAutoMessage() {
     } catch (e) { showTyping(false); }
 }
 
-// ========== 跨对话消息通知（微信式顶部弹窗）==========
-let notifyTargetId = null;
-let notifyPendingContent = null;  // 【修复】独立存储通知完整内容，不依赖 pendingNotifyMessages key 查找
-let notifyTimer = null;
-let notifyDismissTimer = null;
-let notifyFirstRun = true;
-const NOTIFY_INTERVAL_MIN = 60 * 1000;   // 常规最小间隔
-const NOTIFY_INTERVAL_MAX = 120 * 1000;  // 常规最大间隔
-const NOTIFY_FIRST_DELAY = 6 * 1000;     // 首次触发延迟（快速验证）
-
-function showNotification(conv, preview, fullContent) {
-    const banner = document.getElementById("notify-banner");
-    if (banner.classList.contains("show")) return;
-    console.log("[通知弹窗] 显示:", conv.name, "| 预览:", preview, "| 内容长度:", fullContent ? fullContent.length : 0);
-    notifyTargetId = conv.id;
-    notifyPendingContent = fullContent;  // 【修复】独立存储，点击时直接用，不走 pendingNotifyMessages key 查找
-    document.getElementById("notify-name").textContent = conv.name;
-    document.getElementById("notify-preview").textContent = preview;
-    banner.classList.add("show");
-    if (notifyDismissTimer) clearTimeout(notifyDismissTimer);
-    notifyDismissTimer = setTimeout(hideNotification, 8000);
-}
-
-function hideNotification() {
-    console.log("[通知弹窗] 隐藏");
-    document.getElementById("notify-banner").classList.remove("show");
-    notifyTargetId = null;
-    notifyPendingContent = null;
-    if (notifyDismissTimer) clearTimeout(notifyDismissTimer);
-}
-
-function onNotifyClick() {
-    const id = notifyTargetId;
-    // 主路径：独立变量；兜底：pendingNotifyMessages
-    const notifyContent = notifyPendingContent || (id ? pendingNotifyMessages[id] : null);
-    console.log("[通知弹窗] 点击跳转, targetId:", id, "| 独立:", !!notifyPendingContent, "| 最终:", !!notifyContent);
-    if (!notifyContent) {
-    } else {
-    }
-    hideNotification();
-    if (id && notifyContent) {
-        switchTab("chat");
-        switchConversation(id, notifyContent);
-    }
-}
-
-async function checkCrossNotification() {
-    console.log("[通知] checkCrossNotification 触发, currentConvId:", currentConvId, "conversations.length:", conversations.length);
-    if (!currentConvId) { console.log("[通知] 未选择对话，跳过"); scheduleNotify(); return; }
-    const candidates = conversations.filter(c => c.id !== currentConvId && c.messages && c.messages.length > 0);
-    console.log("[通知] 候选对话数:", candidates.length);
-    if (candidates.length === 0) { scheduleNotify(); return; }
-    const conv = candidates[Math.floor(Math.random() * candidates.length)];
-    const myGen = activeGen;
-    const myCurrentId = currentConvId;
-    const targetId = conv.id;
-    console.log("[通知] 选中:", conv.name, "targetId:", targetId);
-    try {
-        const res = await fetch("/api/notify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ conv_id: targetId })
-        });
-        const data = await res.json();
-        console.log("[通知] API返回:", data.content ? "有内容" : data.error || "空");
-        if (data.content && activeGen === myGen && currentConvId !== targetId) {
-            const preview = data.content.replace(/[\n\r]/g, " ").substring(0, 50);
-            showNotification(conv, preview, data.content);
-            // 【修复】将通知内容缓存，下次 loadConversations 时注入目标对话
-            pendingNotifyMessages[targetId] = data.content;
-            // 同时写入当前内存中的对话对象（如果还在 conversations 里的话）
-            const memConv = conversations.find(c => c.id === targetId);
-            if (memConv) {
-                memConv.messages = memConv.messages || [];
-                memConv.messages.push({ role: "assistant", content: data.content });
-                console.log("[通知入库] 消息已写入内存对话:", memConv.name);
-            }
-        }
-    } catch (e) { console.error("[通知] API失败:", e); }
-    scheduleNotify();
-}
-
-function scheduleNotify() {
-    if (notifyTimer) clearTimeout(notifyTimer);
-    let delay;
-    if (notifyFirstRun) {
-        delay = NOTIFY_FIRST_DELAY + Math.random() * 6 * 1000;
-        notifyFirstRun = false;
-        console.log("[通知] 首次调度, delay:", Math.round(delay/1000), "s");
-    } else {
-        delay = NOTIFY_INTERVAL_MIN + Math.random() * (NOTIFY_INTERVAL_MAX - NOTIFY_INTERVAL_MIN);
-        console.log("[通知] 常规调度, delay:", Math.round(delay/1000), "s");
-    }
-    notifyTimer = setTimeout(checkCrossNotification, delay);
-}
-
-function startNotifyTimer() {
-    notifyFirstRun = true;
-    scheduleNotify();
-}
-
-startNotifyTimer();
-
 function openModal(mode) {
     modalMode = mode;
     const conv = mode === "edit" ? conversations.find(c => c.id === currentConvId) : null;
@@ -895,22 +714,8 @@ document.getElementById("send-btn").addEventListener("click", sendMessage);
 document.getElementById("user-input").addEventListener("keydown", e => { if (e.key === "Enter") sendMessage(); });
 document.getElementById("user-input").addEventListener("input", function(e) { updateSendBtn(); resetAutoTimer(); });
 
-// 初始化：加载对话 → 自检通知
-loadConversations().then(() => {
-    console.log("[初始化] 对话已加载, 共", conversations.length, "个");
-    // 自检：3秒后弹一次通知验证功能可用
-    setTimeout(() => {
-        const candidates = conversations.filter(c => c.messages && c.messages.length > 0);
-        if (candidates.length > 0 && !currentConvId) {
-            const conv = candidates[Math.floor(Math.random() * candidates.length)];
-            const testContent = "💬 你有新消息（通知功能自检）";
-            // 【修复】自检消息也写入缓存，确保点击后对话中可见
-            pendingNotifyMessages[conv.id] = testContent;
-            showNotification(conv, testContent, testContent);
-            console.log("[自检] 已触发测试通知, 目标:", conv.name);
-        }
-    }, 3000);
-});
+// 初始化：加载对话
+loadConversations();
 
 // ========== Tab 切换 ==========
 let currentTab = "chat";

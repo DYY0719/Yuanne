@@ -255,42 +255,6 @@ def auto_message():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/notify", methods=["POST"])
-def notify():
-    body = request.get_json()
-    conv_id = body.get("conv_id")
-    data = load_data()
-    conv = next((c for c in data["conversations"] if c["id"] == conv_id), None)
-    if not conv or not conv.get("messages"):
-        return jsonify({"error": "无法生成通知"}), 400
-
-    prompt = (
-        f"你是{conv['name']}。用户正在和其他人聊天，"
-        f"请以你的人设主动给用户发一条消息，吸引用户注意。"
-        f"1-2句话即可，要自然，像真人突然想找你说话一样。"
-    )
-
-    api_messages = []
-    if conv.get("persona"):
-        api_messages.append({"role": "system", "content": conv["persona"]})
-    for m in conv["messages"]:
-        api_messages.append({"role": m["role"], "content": m["content"]})
-    api_messages.append({"role": "user", "content": prompt})
-
-    try:
-        response = client.chat.completions.create(
-            model="deepseek-chat",
-            messages=api_messages,
-            temperature=0.95,
-            top_p=0.95,
-            max_tokens=100,
-        )
-        content = response.choices[0].message.content.strip()
-        return jsonify({"content": content})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 # ============================================================
 # === 朋友圈 API ===
 # ============================================================
