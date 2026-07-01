@@ -627,6 +627,7 @@ async function sendMessage() {
         + '</div>');
     box.scrollTop = box.scrollHeight;
     let aiText = "";
+    let streamHandled = false;  // 【修复】标记 SSE 流是否已被处理（done/error），防止安全网误触发
     try {
         const res = await fetch("/api/chat", {
             method: "POST",
@@ -651,6 +652,7 @@ async function sendMessage() {
                 try {
                     const data = JSON.parse(dataStr);
                     if (data.done) {
+                        streamHandled = true;
                         if (conv) {
                             conv.messages = conv.messages || [];
                             conv.messages.push({ role: "user", content: text });
@@ -660,10 +662,16 @@ async function sendMessage() {
                         if (lines.length === 0) { showTyping(false); enableInput(); }
                         else { showLines(lines, 0); }
                         resetAutoTimer();
+                    } else if (data.error) {
+                        streamHandled = true;
+                        console.error("[SSE错误]", data.error);
+                        showTyping(false); enableInput();
                     } else if (data.content) { aiText += data.content; }
                 } catch (e) {}
             }
         }
+        // 【修复】流意外结束安全网：没收到 done/error 事件才兜底
+        if (!streamHandled) { showTyping(false); enableInput(); }
     } catch (err) { showTyping(false); enableInput(); }
     function showLines(lines, idx) {
         // 【修复】世代校验：切过对话则停止逐行渲染
