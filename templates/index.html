@@ -527,7 +527,7 @@ function renderContacts() {
     });
 }
 
-async function switchConversation(id) {
+async function switchConversation(id, notifyContent) {
     // 【修复】先递增世代，让所有进行中的异步操作（SSE/autoMessage/showLines）立即失效
     activeGen++;
     // 【修复】currentConvId 提前到 await 之前更新，旧锁立即生效
@@ -548,6 +548,17 @@ async function switchConversation(id) {
     // 加载期间可能又切走了，再次校验
     if (currentConvId !== id) return;
     const conv = conversations.find(c => c.id === id);
+    // 【修复】直接注入通知内容：绕过 loadConversations 注入时序，在渲染前确保消息到位
+    if (notifyContent && conv) {
+        conv.messages = conv.messages || [];
+        const lastMsg = conv.messages[conv.messages.length - 1];
+        if (!lastMsg || lastMsg.content !== notifyContent) {
+            conv.messages.push({ role: "assistant", content: notifyContent });
+            console.log("[通知注入] switchConversation 直注:", conv.name, "|", notifyContent.substring(0, 30));
+        } else {
+            console.log("[通知注入] 跳过(末条已存在):", conv.name);
+        }
+    }
     document.getElementById("chat-title").textContent = conv ? conv.name : "";
     document.getElementById("settings-btn").style.display = "inline-block";
     document.getElementById("user-input").disabled = false;
@@ -761,11 +772,12 @@ function hideNotification() {
 
 function onNotifyClick() {
     const id = notifyTargetId;
-    console.log("[通知弹窗] 点击跳转, targetId:", id);
+    const notifyContent = pendingNotifyMessages[id];
+    console.log("[通知弹窗] 点击跳转, targetId:", id, "| 缓存内容:", !!notifyContent);
     hideNotification();
     if (id) {
         switchTab("chat");
-        switchConversation(id);
+        switchConversation(id, notifyContent);
     }
 }
 
