@@ -83,6 +83,91 @@ def save_data(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+
+# ============================================================
+# === 消息通知系统 (SSE实时推送) ===
+# ============================================================
+
+import queue as _queue
+import threading as _threading
+
+_notify_queue = _queue.Queue()
+_sse_clients = 0
+_sse_lock = _threading.Lock()
+
+def _push_notification(notif):
+    _notify_queue.put(notif)
+
+def _make_notification(conv_id, conv_name, content, ntype='new_message'):
+    notif = {
+        'id': str(int(time.time() * 1000)) + '_' + conv_id,
+        'conv_id': conv_id,
+        'conv_name': conv_name,
+        'content': content[:80],
+        'type': ntype,
+        'timestamp': int(time.time()),
+        'read': False
+    }
+    data = load_data()
+    if 'notifications' not in data:
+        data['notifications'] = []
+    data['notifications'].insert(0, notif)
+    data['notifications'] = data['notifications'][:50]
+    save_data(data)
+    _push_notification(notif)
+    return notif
+
+@app.route('/api/notify/stream')
+def notify_stream():
+    global _sse_clients
+    with _sse_lock:
+        _sse_clients += 1
+    def gen():
+        try:
+            while True:
+                notif = _notify_queue.get()
+                yield f'data: {json.dumps(notif)}\n\n'
+        except GeneratorExit:
+            pass
+        finally:
+            with _sse_lock:
+                global _sse_clients
+                _sse_clients -= 1
+    resp = Response(gen(), mimetype='text/event-stream')
+    resp.headers['Cache-Control'] = 'no-cache'
+    resp.headers['X-Accel-Buffering'] = 'no'
+    return resp
+
+@app.route('/api/notifications', methods=['GET'])
+def list_notifications():
+    data = load_data()
+    return jsonify(data.get('notifications', []))
+
+@app.route('/api/notifications/read', methods=['POST'])
+def mark_notifications_read():
+    body = request.get_json() or {}
+    ids = body.get('ids', [])
+    data = load_data()
+    for n in data.get('notifications', []):
+        if n['id'] in ids:
+            n['read'] = True
+    save_data(data)
+    return jsonify({'ok': True})
+
+@app.route('/api/notifications/read-all', methods=['POST'])
+def mark_all_read():
+    data = load_data()
+    for n in data.get('notifications', []):
+        n['read'] = True
+    save_data(data)
+    return jsonify({'ok': True})
+
+@app.route('/api/notifications/clear', methods=['POST'])
+def clear_notifications():
+    data = load_data()
+    data['notifications'] = []
+    save_data(data)
+    return jsonify({'ok': True})
 import flask
 
 if getattr(sys, 'frozen', False):
@@ -208,6 +293,7 @@ def chat():
                     yield f"data: {json.dumps({'content': token})}\n\n"
             conv["messages"].append({"role": "assistant", "content": full})
             save_data(data)
+            _make_notification(conv_id, conv["name"], full, "new_message")
             yield f"data: {json.dumps({'done': True, 'full': full})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
@@ -250,6 +336,7 @@ def auto_message():
         full = response.choices[0].message.content
         conv["messages"].append({"role": "assistant", "content": full})
         save_data(data)
+        _make_notification(conv_id, conv["name"], full, "auto_message")
         return jsonify({"content": full})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -290,6 +377,8 @@ def create_post():
         data["posts"] = []
     data["posts"].append(post)
     save_data(data)
+    if conv:
+        _make_notification(conv["id"], conv["name"], content, "new_post")
     return jsonify(post)
 
 
@@ -374,6 +463,7 @@ def auto_post():
             data["posts"] = []
         data["posts"].append(post)
         save_data(data)
+        _make_notification(conv["id"], conv["name"], content, "new_post")
         return jsonify(post)
     except Exception as e:
         return jsonify({"error": str(e)}), 500

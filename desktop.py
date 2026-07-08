@@ -21,5 +21,5 @@ if __name__ == "__main__":
             pass
         time.sleep(0.2)
 
-    webview.create_window("Yuanne", "http://127.0.0.1:5099/?v=5", width=420, height=700)
+    webview.create_window("Yuanne", "http://127.0.0.1:5099/?v=6", width=420, height=700, easy_drag=False)
     webview.start()

@@ -319,6 +319,162 @@ body {
 .tab-item .tab-icon { margin-bottom: 2px; line-height: 0; pointer-events: none; }
 .tab-item.active { color: #333; }
 
+
+/* ===== ?????? ===== */
+.notif-bell {
+    position: relative;
+    cursor: pointer;
+    color: #999;
+    display: flex;
+    align-items: center;
+    padding: 4px 6px;
+    border-radius: 6px;
+    transition: background 0.12s;
+}
+.notif-bell:hover { background: #e5e5e5; color: #555; }
+.notif-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background: #e74c3c;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    min-width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 8px;
+    padding: 0 4px;
+    display: none;
+}
+.notif-badge.show { display: block; }
+
+/* ???? - ????? */
+.notif-panel {
+    position: fixed;
+    top: 0;
+    right: -360px;
+    width: 340px;
+    height: 100%;
+    background: #fff;
+    box-shadow: -4px 0 24px rgba(0,0,0,0.08);
+    z-index: 200;
+    transition: right 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    display: flex;
+    flex-direction: column;
+}
+.notif-panel.open { right: 0; }
+.notif-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 20px 12px;
+    border-bottom: 1px solid #f0f0f0;
+    flex-shrink: 0;
+}
+.notif-panel-header h3 { font-size: 15px; font-weight: 600; color: #1a1a1a; }
+.notif-panel-actions { display: flex; gap: 8px; }
+.notif-panel-actions button {
+    border: none; background: #f0f0f0;
+    font-size: 12px; padding: 5px 12px;
+    border-radius: 5px; cursor: pointer;
+    color: #666;
+}
+.notif-panel-actions button:hover { background: #e5e5e5; }
+.notif-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+.notif-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 20px;
+    cursor: pointer;
+    transition: background 0.1s;
+    border-bottom: 0.5px solid rgba(0,0,0,0.04);
+}
+.notif-item:hover { background: #f9f9f9; }
+.notif-item.unread { background: #f0f7ff; }
+.notif-item.unread:hover { background: #e8f0fe; }
+.notif-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #e8e8e8;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+.notif-icon.msg { background: #e3f0ff; }
+.notif-icon.post { background: #e8f8e8; }
+.notif-icon.reaction { background: #fff3e0; }
+.notif-body { flex: 1; min-width: 0; }
+.notif-body .notif-name { font-size: 13px; font-weight: 500; color: #1a1a1a; margin-bottom: 2px; }
+.notif-body .notif-text {
+    font-size: 12px;
+    color: #888;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.notif-body .notif-time {
+    font-size: 11px;
+    color: #bbb;
+    margin-top: 3px;
+}
+.notif-empty {
+    text-align: center;
+    color: #bbb;
+    padding: 60px 20px;
+    font-size: 13px;
+}
+
+/* ???? Toast - ????? */
+.notif-toast {
+    position: fixed;
+    top: -80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #fff;
+    border-radius: 8px;
+    padding: 12px 20px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 340px;
+    transition: top 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    cursor: pointer;
+    border: 1px solid #eee;
+}
+.notif-toast.show { top: 16px; }
+.notif-toast .toast-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: #e8e8e8; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+}
+.notif-toast .toast-body { flex: 1; min-width: 0; }
+.notif-toast .toast-name { font-size: 13px; font-weight: 500; color: #1a1a1a; }
+.notif-toast .toast-text { font-size: 12px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.notif-toast .toast-close {
+    border: none; background: none; font-size: 16px; color: #ccc;
+    cursor: pointer; padding: 2px; flex-shrink: 0;
+}
+.notif-toast .toast-close:hover { color: #999; }
+
+/* ??? */
+.notif-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.15);
+    z-index: 190;
+    display: none;
+}
+.notif-overlay.show { display: block; }
+
 </style>
 </head>
 <body>
@@ -335,7 +491,13 @@ body {
     <div id="chat-main">
         <div id="chat-header">
             <h3 id="chat-title">选择一个对话</h3>
-            <button id="settings-btn" title="编辑人设" style="display:none">⚙</button>
+            <div style="display:flex;align-items:center;gap:6px;">
+                <div class="notif-bell" id="notif-bell" title="通知">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    <span class="notif-badge" id="notif-badge"></span>
+                </div>
+                <button id="settings-btn" title="编辑人设" style="display:none">⚙</button>
+            </div>
         </div>
         <div id="chat-box">
             <div id="welcome">选择或新建一个对话开始聊天</div>
@@ -846,6 +1008,235 @@ function scheduleAutoPost() {
 function stopAutoPostTimer() { clearTimeout(autoPostTimer); autoPostTimer = null; }
 
 loadPosts();
+
+
+// ========== ?????? ==========
+let notifications = [];
+let notifToastTimer = null;
+
+async function loadNotifications() {
+    try {
+        const res = await fetch('/api/notifications');
+        notifications = await res.json();
+        renderNotifications();
+    } catch(e) {}
+}
+
+function renderNotifications() {
+    const list = document.getElementById('notif-list');
+    if (!list) return;
+    const unread = notifications.filter(n => !n.read).length;
+    updateBadge(unread);
+
+    if (notifications.length === 0) {
+        list.innerHTML = '<div class="notif-empty">🔔 暂无通知</div>';
+        return;
+    }
+    list.innerHTML = notifications.map(n => {
+        const iconMap = { 'new_message': '💬', 'auto_message': '💬', 'new_post': '📝', 'post_reaction': '❤️' };
+        const iconClass = { 'new_message': 'msg', 'auto_message': 'msg', 'new_post': 'post', 'post_reaction': 'reaction' };
+        const icon = iconMap[n.type] || '💬';
+        const cls = iconClass[n.type] || '';
+        const timeStr = new Date(n.timestamp * 1000).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const unreadCls = n.read ? '' : ' unread';
+        return '<div class="notif-item' + unreadCls + '" data-id="' + n.id + '" data-conv-id="' + n.conv_id + '">'
+            + '<div class="notif-icon ' + cls + '">' + icon + '</div>'
+            + '<div class="notif-body">'
+            + '<div class="notif-name">' + escapeHtml(n.conv_name) + '</div>'
+            + '<div class="notif-text">' + escapeHtml(n.content) + '</div>'
+            + '<div class="notif-time">' + timeStr + '</div>'
+            + '</div></div>';
+    }).join('');
+
+    list.querySelectorAll('.notif-item').forEach(el => {
+        el.addEventListener('click', async function() {
+            const convId = this.dataset.convId;
+            const id = this.dataset.id;
+            // Mark as read
+            await fetch('/api/notifications/read', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: [id] })
+            });
+            closeNotifPanel();
+            // Switch to conversation
+            if (convId && convId !== currentConvId) {
+                await switchConversation(convId);
+            } else if (currentTab !== 'chat') {
+                switchTab('chat');
+            }
+        });
+    });
+}
+
+function updateBadge(count) {
+    const badge = document.getElementById('notif-badge');
+    if (!badge) return;
+    if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : count;
+        badge.classList.add('show');
+    } else {
+        badge.classList.remove('show');
+    }
+}
+
+function openNotifPanel() {
+    document.getElementById('notif-panel').classList.add('open');
+    document.getElementById('notif-overlay').classList.add('show');
+    loadNotifications(); // refresh on open
+}
+
+function closeNotifPanel() {
+    document.getElementById('notif-panel').classList.remove('open');
+    document.getElementById('notif-overlay').classList.remove('show');
+}
+
+function showNotifToast(notif) {
+    const toast = document.getElementById('notif-toast');
+    if (!toast) return;
+    const iconMap = { 'new_message': '💬', 'auto_message': '💬', 'new_post': '📝', 'post_reaction': '❤️' };
+    document.getElementById('toast-avatar').textContent = iconMap[notif.type] || '💬';
+    document.getElementById('toast-name').textContent = notif.conv_name;
+    document.getElementById('toast-text').textContent = notif.content;
+    toast.classList.add('show');
+    toast.dataset.convId = notif.conv_id;
+    clearTimeout(notifToastTimer);
+    notifToastTimer = setTimeout(() => { toast.classList.remove('show'); }, 4000);
+}
+
+function hideNotifToast() {
+    const toast = document.getElementById('notif-toast');
+    toast.classList.remove('show');
+    clearTimeout(notifToastTimer);
+}
+
+// ========== SSE ?????? ==========
+function connectNotifySSE() {
+    let es = null;
+    function connect() {
+        if (es) es.close();
+        try {
+            es = new EventSource('/api/notify/stream');
+            es.onmessage = function(e) {
+                try {
+                    const notif = JSON.parse(e.data);
+                    // Add to front of local list
+                    notifications.unshift(notif);
+                    if (notifications.length > 50) notifications = notifications.slice(0, 50);
+                    renderNotifications();
+                    // Show toast if panel is closed and not on chat tab
+                    const panel = document.getElementById('notif-panel');
+                    if (!panel.classList.contains('open')) {
+                        showNotifToast(notif);
+                    }
+                } catch(err) {}
+            };
+            es.onerror = function() {
+                es.close();
+                setTimeout(connect, 3000);
+            };
+        } catch(e) {
+            setTimeout(connect, 5000);
+        }
+    }
+    connect();
+}
+
+// ========== Event Bindings ==========
+document.addEventListener('DOMContentLoaded', function() {
+    // Bell click
+    const bell = document.getElementById('notif-bell');
+    if (bell) {
+        bell.addEventListener('click', function(e) {
+            e.stopPropagation();
+            openNotifPanel();
+        });
+    }
+
+    // Overlay click to close
+    const overlay = document.getElementById('notif-overlay');
+    if (overlay) {
+        overlay.addEventListener('click', closeNotifPanel);
+    }
+
+    // Toast click to jump
+    const toast = document.getElementById('notif-toast');
+    if (toast) {
+        toast.addEventListener('click', function(e) {
+            if (e.target.classList.contains('toast-close')) return;
+            const convId = this.dataset.convId;
+            hideNotifToast();
+            if (convId) {
+                if (convId !== currentConvId) {
+                    switchConversation(convId);
+                }
+                if (currentTab !== 'chat') {
+                    switchTab('chat');
+                }
+            }
+        });
+    }
+
+    // Toast close button
+    const toastClose = document.getElementById('toast-close');
+    if (toastClose) {
+        toastClose.addEventListener('click', function(e) {
+            e.stopPropagation();
+            hideNotifToast();
+        });
+    }
+
+    // Mark all read
+    const readAllBtn = document.getElementById('notif-read-all');
+    if (readAllBtn) {
+        readAllBtn.addEventListener('click', async function() {
+            await fetch('/api/notifications/read-all', { method: 'POST' });
+            await loadNotifications();
+            renderNotifications();
+        });
+    }
+
+    // Clear all
+    const clearBtn = document.getElementById('notif-clear');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', async function() {
+            await fetch('/api/notifications/clear', { method: 'POST' });
+            await loadNotifications();
+            renderNotifications();
+        });
+    }
+});
+
+// Connect SSE after initial load
+setTimeout(connectNotifySSE, 1000);
+
 </script>
+
+<!-- 通知遮罩 -->
+<div class="notif-overlay" id="notif-overlay"></div>
+
+<!-- 通知面板 -->
+<div class="notif-panel" id="notif-panel">
+    <div class="notif-panel-header">
+        <h3>🔔 通知</h3>
+        <div class="notif-panel-actions">
+            <button id="notif-read-all">全部已读</button>
+            <button id="notif-clear">清空</button>
+            <button onclick="closeNotifPanel()" title="关闭" style="border:none;background:none;font-size:16px;cursor:pointer;color:#999;padding:2px 6px;margin-left:2px;">✕</button>
+        </div>
+    </div>
+    <div class="notif-list" id="notif-list"></div>
+</div>
+
+<!-- 通知 Toast -->
+<div class="notif-toast" id="notif-toast">
+    <div class="toast-avatar" id="toast-avatar">💬</div>
+    <div class="toast-body">
+        <div class="toast-name" id="toast-name"></div>
+        <div class="toast-text" id="toast-text"></div>
+    </div>
+    <button class="toast-close" id="toast-close">✕</button>
+</div>
+
 </body>
 </html>
