@@ -1,5 +1,5 @@
 import os, json, sys, time
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify, Response, send_from_directory
 from openai import OpenAI
 
 # === 打包路径兼容 ===
@@ -10,7 +10,7 @@ else:
 
 # === DeepSeek 配置 ===
 client = OpenAI(
-    api_key="sk-821671fa8efa4d7fbca70ac582c961bf",
+    api_key=os.environ.get("DEEPSEEK_API_KEY", ""),
     base_url="https://api.deepseek.com"
 )
 
@@ -199,6 +199,13 @@ def ima():
     if os.path.exists(IMA_PATH):
         return flask.send_file(IMA_PATH, mimetype="image/jpeg")
     return "", 404
+
+
+# 通用静态文件路由（PWA manifest、图标、sw.js 等）
+@app.route("/static/<path:filename>")
+def serve_static(filename):
+    static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+    return send_from_directory(static_dir, filename)
 
 
 @app.route("/api/conversations", methods=["GET"])
@@ -523,5 +530,5 @@ def auto_react(post_id):
 
 
 if __name__ == "__main__":
-    print("Yuanne 启动 -> http://127.0.0.1:5000")
-    app.run(debug=False, port=5099)
+    print("Yuanne 启动 -> http://0.0.0.0:5099")
+    app.run(debug=False, port=5099, host="0.0.0.0")

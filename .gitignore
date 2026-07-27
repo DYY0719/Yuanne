@@ -1,6 +1,9 @@
 data.json
+data.json.backup*
 __pycache__/
 build/
 dist/
 *.spec
 *.exe
+q
+.env
