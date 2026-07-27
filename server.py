@@ -211,7 +211,7 @@ def serve_static(filename):
 @app.route("/api/conversations", methods=["GET"])
 def list_conversations():
     data = load_data()
-    return jsonify([{"id": c["id"], "name": c["name"], "persona": c["persona"], "messages": c.get("messages", [])} for c in data["conversations"]])
+    return jsonify([{"id": c["id"], "name": c["name"], "persona": c["persona"], "voice": c.get("voice", ""), "messages": c.get("messages", [])} for c in data["conversations"]])
 
 
 @app.route("/api/conversations", methods=["POST"])
@@ -222,6 +222,7 @@ def create_conversation():
         "id": str(int(time.time() * 1000)),
         "name": body.get("name", "新对话"),
         "persona": body.get("persona", ""),
+        "voice": body.get("voice", ""),
         "messages": []
     }
     data["conversations"].append(conv)
@@ -240,6 +241,8 @@ def update_conversation(conv_id):
         conv["name"] = body["name"]
     if "persona" in body:
         conv["persona"] = body["persona"]
+    if "voice" in body:
+        conv["voice"] = body["voice"]
     save_data(data)
     return jsonify({"id": conv["id"], "name": conv["name"], "persona": conv["persona"]})
 

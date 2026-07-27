@@ -611,6 +611,143 @@ body {
     .tab-item .tab-icon svg { width: 20px; height: 20px; }
 }
 
+/* ===== 通话界面 ===== */
+#call-btn {
+    display: none;
+    border: none; background: none;
+    font-size: 18px; cursor: pointer;
+    padding: 4px 8px; border-radius: 6px;
+    color: #999; transition: background 0.12s;
+}
+#call-btn:hover, #call-btn:active { background: #e5e5e5; }
+#call-screen {
+    display: none;
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: #1a1a2e;
+    z-index: 500;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #e8e0d8;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+#call-screen.active { display: flex; }
+#call-avatar {
+    width: 100px; height: 100px;
+    border-radius: 50%;
+    overflow: hidden;
+    margin-bottom: 20px;
+    box-shadow: 0 0 40px rgba(180,160,200,0.3);
+    animation: call-pulse 2s ease-in-out infinite;
+}
+#call-avatar img { width: 100%; height: 100%; object-fit: cover; }
+@keyframes call-pulse {
+    0%, 100% { box-shadow: 0 0 30px rgba(180,160,200,0.3); }
+    50% { box-shadow: 0 0 60px rgba(180,160,200,0.6); }
+}
+#call-name {
+    font-size: 22px; font-weight: 600;
+    margin-bottom: 6px;
+}
+#call-status {
+    font-size: 13px; color: #999;
+    margin-bottom: 30px;
+}
+#call-subtitles {
+    flex: 1;
+    width: 90%;
+    max-width: 360px;
+    overflow-y: auto;
+    padding: 10px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    font-size: 15px;
+    -webkit-overflow-scrolling: touch;
+}
+.call-sub {
+    padding: 10px 16px;
+    border-radius: 12px;
+    max-width: 85%;
+    line-height: 1.5;
+}
+.call-sub.user {
+    align-self: flex-end;
+    background: rgba(255,255,255,0.08);
+    color: #ccc;
+}
+.call-sub.ai {
+    align-self: flex-start;
+    background: rgba(180,160,220,0.15);
+    color: #e8d8f0;
+}
+#call-hold-btn {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.08);
+    cursor: pointer;
+    font-size: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    margin-bottom: 16px;
+}
+#call-hold-btn:active, #call-hold-btn.listening {
+    background: rgba(220,80,80,0.3);
+    border-color: #d44;
+    transform: scale(1.1);
+    box-shadow: 0 0 40px rgba(220,80,80,0.4);
+}
+#call-hold-label {
+    font-size: 12px; color: #888;
+    margin-bottom: 24px;
+}
+#call-hangup {
+    width: 50px; height: 50px;
+    border-radius: 50%;
+    border: none;
+    background: #d44;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+#call-hangup:active { background: #b33; transform: scale(0.95); }
+
+/* ===== 麦克风按钮 ===== */
+#mic-btn {
+    border: none; background: none;
+    font-size: 20px; cursor: pointer;
+    padding: 6px 8px; border-radius: 6px;
+    color: #999; transition: all 0.15s;
+    flex-shrink: 0;
+}
+#mic-btn:active { background: #e0e0e0; }
+#mic-btn.listening {
+    color: #d44;
+    animation: mic-pulse 0.8s ease-in-out infinite;
+}
+@keyframes mic-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+}
+
+/* ===== 语音选择框 ===== */
+#modal-voice {
+    width: 100%; padding: 10px 12px;
+    border: 1px solid #e0e0e0; border-radius: 6px;
+    font-size: 14px; outline: none; font-family: inherit;
+    background: #fff; color: #333;
+    margin-top: 4px;
+}
+
 </style>
 </head>
 <body>
@@ -633,6 +770,7 @@ body {
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
                     <span class="notif-badge" id="notif-badge"></span>
                 </div>
+                <button id="call-btn" title="打电话" style="display:none">📞</button>
                 <button id="settings-btn" title="编辑人设" style="display:none">⚙</button>
             </div>
         </div>
@@ -640,6 +778,7 @@ body {
             <div id="welcome">选择或新建一个对话开始聊天</div>
         </div>
         <div id="input-area">
+            <button id="mic-btn" title="语音输入">🎤</button>
             <input type="text" id="user-input" placeholder="输入消息..." disabled>
             <button id="send-btn" disabled>发送</button>
         </div>
@@ -685,11 +824,24 @@ body {
         <input type="text" id="modal-name" placeholder="如：段瑾">
         <label>AI 人设（选填）</label>
         <textarea id="modal-persona" placeholder="描述 AI 的性格、语气、角色……"></textarea>
+        <label>声音（选填）</label>
+        <select id="modal-voice"></select>
         <div class="modal-btns">
             <button class="btn-cancel" onclick="closeModal()">取消</button>
             <button class="btn-save" id="modal-save">保存</button>
         </div>
     </div>
+</div>
+
+<!-- 通话界面 -->
+<div id="call-screen">
+    <div id="call-avatar"><img src="/static/ima.jpg" alt=""></div>
+    <div id="call-name">AI</div>
+    <div id="call-status">通话中...</div>
+    <div id="call-subtitles"></div>
+    <button id="call-hold-btn">🎤</button>
+    <div id="call-hold-label">按住说话，松开发送</div>
+    <button id="call-hangup">📞</button>
 </div>
 
 <script>
@@ -990,6 +1142,15 @@ function openModal(mode) {
     document.getElementById("modal-title").textContent = mode === "new" ? "新建对话" : "编辑人设";
     document.getElementById("modal-name").value = conv ? conv.name : "";
     document.getElementById("modal-persona").value = conv ? (conv.persona || "") : "";
+    // 填充语音选择
+    const voiceSelect = document.getElementById("modal-voice");
+    voiceSelect.innerHTML = '<option value="">默认声音</option>';
+    loadVoices().then(voices => {
+        voices.forEach(v => {
+            const sel = (conv && conv.voice === v.name) ? ' selected' : '';
+            voiceSelect.innerHTML += '<option value="' + v.name + '"' + sel + '>' + v.name + ' (' + v.lang + ')</option>';
+        });
+    });
     document.getElementById("modal").classList.add("show");
 }
 function closeModal() { document.getElementById("modal").classList.remove("show"); }
@@ -997,12 +1158,13 @@ function closeModal() { document.getElementById("modal").classList.remove("show"
 document.getElementById("modal-save").addEventListener("click", async () => {
     const name = document.getElementById("modal-name").value.trim() || "未命名";
     const persona = document.getElementById("modal-persona").value.trim();
+    const voice = document.getElementById("modal-voice").value;
     if (modalMode === "new") {
-        const conv = await Api.post("/api/conversations", { name, persona });
+        const conv = await Api.post("/api/conversations", { name, persona, voice });
         await loadConversations();
         switchConversation(conv.id);
     } else if (modalMode === "edit" && currentConvId) {
-        await Api.put(`/api/conversations/${currentConvId}`, { name, persona });
+        await Api.put(`/api/conversations/${currentConvId}`, { name, persona, voice });
         await loadConversations();
         renderChatArea(); renderConvList();
     }
@@ -1380,6 +1542,155 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Connect SSE after initial load
 setTimeout(connectNotifySSE, 1000);
+
+// ========== 语音功能 ==========
+function loadVoices() {
+    return new Promise(resolve => {
+        const voices = speechSynthesis.getVoices();
+        if (voices.length > 0) { resolve(voices.filter(function(v) { return v.lang.startsWith('zh'); })); }
+        else { speechSynthesis.onvoiceschanged = function() { resolve(speechSynthesis.getVoices().filter(function(v) { return v.lang.startsWith('zh'); })); }; }
+    });
+}
+function speakText(text, voiceName) {
+    if (!text) return;
+    speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN'; u.rate = 1.0; u.pitch = 1.0; u.volume = 1.0;
+    if (voiceName) {
+        var match = speechSynthesis.getVoices().find(function(v) { return v.name === voiceName; });
+        if (match) u.voice = match;
+    }
+    speechSynthesis.speak(u);
+}
+function autoSpeakAiReply(conv, text) {
+    if (!isInCall) return;
+    speakText(text, (conv && conv.voice) ? conv.voice : '');
+}
+
+// ========== 麦克风按钮 ==========
+var micRecognition = null;
+document.getElementById('mic-btn').addEventListener('pointerdown', function(e) {
+    e.preventDefault();
+    var btn = this;
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { alert('浏览器不支持语音识别，请用 Chrome'); return; }
+    if (micRecognition) { micRecognition.abort(); }
+    micRecognition = new SR();
+    micRecognition.lang = 'zh-CN';
+    micRecognition.interimResults = false;
+    micRecognition.maxAlternatives = 1;
+    btn.classList.add('listening');
+    micRecognition.onresult = function(e) {
+        var t = e.results[0][0].transcript;
+        var inp = document.getElementById('user-input');
+        inp.value = (inp.value + ' ' + t).trim();
+        updateSendBtn();
+    };
+    micRecognition.onerror = function() { btn.classList.remove('listening'); };
+    micRecognition.onend = function() { btn.classList.remove('listening'); micRecognition = null; };
+    micRecognition.start();
+});
+
+// ========== 通话界面 ==========
+var isInCall = false, callConvId = null, callPollInterval = null;
+
+document.getElementById('call-btn').addEventListener('click', function() {
+    if (!currentConvId) return;
+    openCallScreen();
+});
+
+function openCallScreen() {
+    isInCall = true; callConvId = currentConvId;
+    var conv = conversations.find(function(c) { return c.id === currentConvId; });
+    document.getElementById('call-avatar').querySelector('img').src = '/static/ima.jpg';
+    document.getElementById('call-name').textContent = conv ? conv.name : 'AI';
+    document.getElementById('call-status').textContent = '通话中...';
+    document.getElementById('call-subtitles').innerHTML = '';
+    document.getElementById('call-screen').classList.add('active');
+    startCallPollForAiReply();
+}
+
+function closeCallScreen() {
+    isInCall = false; callConvId = null;
+    speechSynthesis.cancel();
+    if (callPollInterval) { clearInterval(callPollInterval); callPollInterval = null; }
+    document.getElementById('call-screen').classList.remove('active');
+}
+
+document.getElementById('call-hangup').addEventListener('click', closeCallScreen);
+
+var callRecognition = null;
+document.getElementById('call-hold-btn').addEventListener('pointerdown', function(e) {
+    e.preventDefault();
+    var btn = this;
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    if (callRecognition) { callRecognition.abort(); }
+    callRecognition = new SR();
+    callRecognition.lang = 'zh-CN';
+    callRecognition.interimResults = false;
+    callRecognition.maxAlternatives = 1;
+    btn.classList.add('listening');
+    document.getElementById('call-status').textContent = '正在听...';
+    callRecognition.onresult = function(e) {
+        var text = e.results[0][0].transcript;
+        addCallSubtitle('user', text);
+        sendMessageFromCall(text);
+    };
+    callRecognition.onerror = function() {
+        btn.classList.remove('listening');
+        document.getElementById('call-status').textContent = '通话中...';
+    };
+    callRecognition.onend = function() {
+        btn.classList.remove('listening');
+        document.getElementById('call-status').textContent = '通话中...';
+        callRecognition = null;
+    };
+    callRecognition.start();
+});
+
+function addCallSubtitle(role, text) {
+    var subs = document.getElementById('call-subtitles');
+    var div = document.createElement('div');
+    div.className = 'call-sub ' + role;
+    div.textContent = text;
+    subs.appendChild(div);
+    subs.scrollTop = subs.scrollHeight;
+}
+
+async function sendMessageFromCall(text) {
+    if (!callConvId || !text) return;
+    if (currentConvId !== callConvId) { await switchConversation(callConvId); }
+    var inp = document.getElementById('user-input');
+    inp.value = text;
+    updateSendBtn();
+    await sendMessage();
+}
+
+function startCallPollForAiReply() {
+    if (callPollInterval) clearInterval(callPollInterval);
+    callPollInterval = setInterval(function() {
+        if (!isInCall || !callConvId) { clearInterval(callPollInterval); callPollInterval = null; return; }
+        var conv = conversations.find(function(c) { return c.id === callConvId; });
+        if (!conv || !conv.messages) return;
+        var lastMsg = conv.messages[conv.messages.length - 1];
+        if (!lastMsg || lastMsg.role !== 'assistant') return;
+        if (conv._lastSpokenIdx !== conv.messages.length) {
+            conv._lastSpokenIdx = conv.messages.length;
+            addCallSubtitle('ai', lastMsg.content);
+            autoSpeakAiReply(conv, lastMsg.content);
+        }
+    }, 800);
+}
+
+// 选择对话后显示通话按钮
+(function() {
+    var orig = switchConversation;
+    switchConversation = async function(id) {
+        await orig(id);
+        document.getElementById('call-btn').style.display = id ? 'inline-block' : 'none';
+    };
+})();
 
 // 注册 Service Worker (PWA)
 if ('serviceWorker' in navigator) {
