@@ -483,48 +483,107 @@ body {
 
 /* ===== 移动端响应式 ===== */
 @media (max-width: 600px) {
+    /* 防止横向溢出 */
+    body { overflow-x: hidden; width: 100vw; max-width: 100vw; }
+    .app, #tab-chat, #tab-contacts, #tab-discover { max-width: 100vw; }
+
     /* 聊天页：单列切换布局 */
-    #tab-chat { position: relative; overflow: hidden; }
+    #tab-chat {
+        position: relative;
+        overflow: hidden;
+        flex-direction: column;
+    }
     #chat-sidebar {
-        width: 100%;
+        width: 100% !important;
+        max-width: 100vw;
         border-right: none;
         flex-shrink: 0;
+        display: flex;
     }
-    #chat-sidebar.mobile-hide { display: none; }
+    #chat-sidebar.mobile-hide { display: none !important; }
     #chat-main {
         display: none;
-        position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-        z-index: 2; background: #f5f5f5;
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 52px;
+        z-index: 10; background: #f5f5f5;
+        flex-direction: column;
     }
-    #chat-main.mobile-show { display: flex; }
+    #chat-main.mobile-show { display: flex !important; }
 
     /* 返回按钮 */
     #back-btn {
         display: inline-flex !important;
         align-items: center;
+        justify-content: center;
         border: none; background: none;
-        font-size: 18px; cursor: pointer;
-        color: #555; padding: 4px 6px; margin-right: 2px;
+        font-size: 20px; cursor: pointer;
+        color: #555; padding: 6px 8px; margin-right: 2px;
         border-radius: 6px;
+        min-width: 36px; min-height: 36px;
     }
     #back-btn:active { background: #e0e0e0; }
-    #chat-header { padding: 12px 16px; gap: 4px; }
-    #chat-header h3 { font-size: 15px; }
+    #chat-header {
+        padding: 10px 12px;
+        gap: 2px;
+        flex-shrink: 0;
+    }
+    #chat-header h3 {
+        font-size: 15px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+        min-width: 0;
+    }
+    /* 移动端隐藏通知铃铛（节省空间） */
+    #chat-header .notif-bell { display: none; }
+    #chat-header #settings-btn { font-size: 18px; padding: 4px 10px; }
 
     /* 对话列表触摸优化 */
+    #conv-list { overflow-y: auto; }
     .conv-item {
         padding: 16px 20px;
         min-height: 52px;
         font-size: 15px;
+        border-bottom: 1px solid #eee;
     }
-    .conv-item .delete-conv { visibility: visible; opacity: 0.4; padding: 6px 8px; }
+    .conv-item .delete-conv { visibility: visible; opacity: 0.5; padding: 8px 10px; font-size: 18px; }
 
-    /* 消息气泡 */
+    /* 侧边栏头部 */
+    #chat-sidebar-header { padding: 16px 20px 14px; }
+    #chat-sidebar-header h2 { font-size: 18px; }
+    #new-btn { width: 36px; height: 36px; font-size: 22px; border-radius: 8px; }
+
+    /* 消息区域 */
     .msg-bubble { max-width: 82%; font-size: 15px; }
-    #chat-box { padding: 14px 12px; }
-    #input-area { padding: 10px 12px; gap: 8px; }
-    #user-input { font-size: 16px; } /* 防 iOS 自动缩放 */
-    #send-btn { padding: 10px 18px; font-size: 14px; }
+    #chat-box {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px 10px;
+        -webkit-overflow-scrolling: touch;
+    }
+    .msg-row { margin-bottom: 16px; }
+
+    /* 输入区域固定在底部 */
+    #input-area {
+        padding: 8px 10px;
+        gap: 8px;
+        flex-shrink: 0;
+        background: #f0f0f0;
+        border-top: 1px solid #ddd;
+    }
+    #user-input {
+        font-size: 16px;
+        padding: 10px 14px;
+        border-radius: 20px;
+    }
+    #send-btn {
+        padding: 10px 16px;
+        font-size: 14px;
+        border-radius: 20px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
 
     /* 弹窗 */
     .modal { width: 90vw; max-width: 400px; padding: 22px 18px 16px; }
@@ -538,11 +597,9 @@ body {
     .notif-item { min-height: 56px; padding: 14px 16px; }
     .notif-toast { max-width: 90vw; left: 5vw; transform: none; }
 
-    /* 通讯录 */
+    /* 通讯录 & 发现页 */
     #contacts-header, #contacts-list-inner { max-width: 100%; }
-    .contact-item .delete-conv { visibility: visible; opacity: 0.4; padding: 6px 8px; }
-
-    /* 发现页评论区 */
+    .contact-item .delete-conv { visibility: visible; opacity: 0.5; padding: 8px 10px; font-size: 18px; }
     .comment-input-row input { font-size: 16px; }
     .comment-input-row button { padding: 8px 16px; font-size: 13px; }
     .moment-card { padding: 14px 16px; }
